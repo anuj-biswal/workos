@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentOS — Agentic AI Workspace</title>
+    <meta name="description" content="Enterprise AI-powered document analysis, data transformation, and visualization platform">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web@2.0.3"></script>
+</head>
+<body>
+
+    <!-- ═══════════════════ LOGIN SCREEN ═══════════════════ -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-bg-orbs">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="orb orb-3"></div>
+        </div>
+        <div class="login-card">
+            <div class="login-brand">
+                <div class="login-brand-icon">
+                    <i class="ph ph-atom" style="font-size: 28px; color: white;"></i>
+                </div>
+                <h1>AgentOS</h1>
+                <p class="login-subtitle">Enterprise Agentic AI Platform</p>
+            </div>
+            <form id="login-form" onsubmit="return false;">
+                <div class="input-group">
+                    <label for="login-name">Name</label>
+                    <input type="text" id="login-name" placeholder="Enter your name" value="Anuj" required>
+                </div>
+                <div class="input-group">
+                    <label for="login-role">Role</label>
+                    <select id="login-role">
+                        <option value="Data Analyst">Data Analyst</option>
+                        <option value="Manager">Manager</option>
+                        <option value="Engineer">Engineer</option>
+                    </select>
+                </div>
+                <button type="submit" class="login-btn" id="login-btn">
+                    <span>Sign In</span>
+                    <i class="ph ph-arrow-right"></i>
+                </button>
+            </form>
+            <p class="login-footer">Powered by OpenAI GPT-5.4 Mini</p>
+        </div>
+    </div>
+
+    <!-- ═══════════════════ MAIN APP ═══════════════════ -->
+    <div id="app-container" class="app-container" style="display:none;">
+
+        <!-- ─── LEFT SIDEBAR ─── -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-icon">
+                    <i class="ph ph-atom" style="font-size:18px; color:white;"></i>
+                </div>
+                <span class="sidebar-brand-text">AgentOS</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-view="dashboard" id="nav-dashboard">
+                    <i class="ph ph-squares-four"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#files" class="nav-item" data-view="files" id="nav-files">
+                    <i class="ph ph-folder-notch-open"></i>
+                    <span>Files</span>
+                </a>
+                <a href="#chat" class="nav-item" data-view="chat" id="nav-chat">
+                    <i class="ph ph-chat-circle-dots"></i>
+                    <span>Agent</span>
+                    <span class="nav-badge" id="chat-badge" style="display:none;">!</span>
+                </a>
+                <a href="#settings" class="nav-item" data-view="settings" id="nav-settings">
+                    <i class="ph ph-gear-six"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-token-mini" id="sidebar-token-mini">
+                    <div class="token-mini-bar">
+                        <div class="token-mini-fill" id="sidebar-token-fill" style="width:0%"></div>
+                    </div>
+                    <span class="token-mini-label" id="sidebar-token-label">0 tokens</span>
+                </div>
+                <div class="sidebar-user" id="sidebar-user">
+                    <div class="user-avatar" id="user-avatar-sidebar">A</div>
+                    <div class="user-info">
+                        <span class="user-name" id="user-name-sidebar">User</span>
+                        <span class="user-role" id="user-role-sidebar">Analyst</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ─── MAIN CONTENT ─── -->
+        <main class="main-content">
+
+            <!-- TOP BAR -->
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <h2 class="page-title" id="page-title">Dashboard</h2>
+                    <span class="page-subtitle" id="page-subtitle">Overview of your workspace</span>
+                </div>
+                <div class="top-bar-right">
+                    <div class="top-bar-status">
+                        <span class="status-dot online"></span>
+                        <span>GPT-5.4 Mini</span>
+                    </div>
+                    <div class="top-bar-search">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" placeholder="Search files..." id="global-search">
+                    </div>
+                    <button class="top-bar-btn" id="top-bar-upload-btn" title="Upload File">
+                        <i class="ph ph-upload-simple"></i>
+                    </button>
+                    <input type="file" id="global-file-upload" style="display:none;" multiple accept=".xlsx,.xls,.csv,.pdf,.txt,.doc,.docx,.png,.jpg,.jpeg">
+                </div>
+            </header>
+
+            <!-- ═══════ VIEW: DASHBOARD ═══════ -->
+            <div class="view" id="view-dashboard">
+                <div class="dashboard-grid">
+
+                    <!-- Calendar Panel -->
+                    <section class="panel calendar-panel" id="calendar-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-calendar-dots"></i> Calendar</h3>
+                            <div class="calendar-nav">
+                                <button class="icon-btn" id="cal-prev"><i class="ph ph-caret-left"></i></button>
+                                <span id="cal-month-year">May 2026</span>
+                                <button class="icon-btn" id="cal-next"><i class="ph ph-caret-right"></i></button>
+                            </div>
+                        </div>
+                        <div class="calendar-grid" id="calendar-grid">
+                            <!-- Generated by JS -->
+                        </div>
+                    </section>
+
+                    <!-- Tasks Panel -->
+                    <section class="panel tasks-panel" id="tasks-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-check-square"></i> Tasks</h3>
+                            <button class="btn-accent btn-sm" id="add-task-btn">
+                                <i class="ph ph-plus"></i> Add
+                            </button>
+                        </div>
+                        <div class="panel-tabs">
+                            <button class="tab active" data-filter="today">Today</button>
+                            <button class="tab" data-filter="upcoming">Upcoming</button>
+                            <button class="tab" data-filter="all">All</button>
+                        </div>
+                        <div class="task-list" id="task-list">
+                            <div class="empty-state">
+                                <i class="ph ph-clipboard-text" style="font-size:2rem;opacity:0.3;"></i>
+                                <p>No tasks yet</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Recent Files Panel -->
+                    <section class="panel recent-files-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-files"></i> Recent Files</h3>
+                            <a href="#files" class="link-btn" onclick="navigateTo('files')">View All →</a>
+                        </div>
+                        <div class="recent-files-list" id="recent-files-list">
+                            <div class="empty-state">
+                                <i class="ph ph-folder-dashed" style="font-size:2rem;opacity:0.3;"></i>
+                                <p>No files yet</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Activity Feed Panel -->
+                    <section class="panel activity-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-clock-counter-clockwise"></i> Activity</h3>
+                        </div>
+                        <div class="activity-list" id="activity-list">
+                            <div class="empty-state">
+                                <i class="ph ph-activity" style="font-size:2rem;opacity:0.3;"></i>
+                                <p>No activity yet</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Quick Stats -->
+                    <section class="panel stats-panel">
+                        <div class="stat-cards">
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background: var(--accent-gradient);"><i class="ph ph-files"></i></div>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="stat-files">0</span>
+                                    <span class="stat-label">Files</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);"><i class="ph ph-check-circle"></i></div>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="stat-tasks-done">0</span>
+                                    <span class="stat-label">Completed</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);"><i class="ph ph-lightning"></i></div>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="stat-executions">0</span>
+                                    <span class="stat-label">Executions</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);"><i class="ph ph-coins"></i></div>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="stat-tokens">0</span>
+                                    <span class="stat-label">Tokens Used</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+
+            <!-- ═══════ VIEW: FILES ═══════ -->
+            <div class="view" id="view-files" style="display:none;">
+                <div class="files-container">
+                    <!-- Upload Zone -->
+                    <div class="upload-zone" id="upload-zone">
+                        <div class="upload-zone-inner">
+                            <i class="ph ph-cloud-arrow-up" style="font-size:3rem; color: var(--accent);"></i>
+                            <h3>Drop files here or click to upload</h3>
+                            <p>Supports: Excel, CSV, PDF, Text, Images</p>
+                            <button class="btn-accent" id="upload-zone-btn">Browse Files</button>
+                            <input type="file" id="upload-zone-input" style="display:none;" multiple accept=".xlsx,.xls,.csv,.pdf,.txt,.doc,.docx,.png,.jpg,.jpeg">
+                        </div>
+                    </div>
+
+                    <!-- File filter tabs -->
+                    <div class="file-tabs">
+                        <button class="tab active" data-file-filter="all">All Files</button>
+                        <button class="tab" data-file-filter="excel">Excel</button>
+                        <button class="tab" data-file-filter="csv">CSV</button>
+                        <button class="tab" data-file-filter="pdf">PDF</button>
+                        <button class="tab" data-file-filter="text">Text</button>
+                        <button class="tab" data-file-filter="image">Images</button>
+                        <div class="tab-spacer"></div>
+                        <button class="icon-btn" id="file-view-grid" title="Grid View"><i class="ph ph-squares-four"></i></button>
+                        <button class="icon-btn" id="file-view-list" title="List View"><i class="ph ph-list"></i></button>
+                    </div>
+
+                    <!-- File Grid -->
+                    <div class="file-grid" id="file-grid">
+                        <div class="empty-state" style="grid-column:1/-1;">
+                            <i class="ph ph-folder-dashed" style="font-size:3rem;opacity:0.3;"></i>
+                            <p>No files in workspace. Upload a file to get started.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Preview Sidebar -->
+                <div class="file-preview-panel" id="file-preview-panel" style="display:none;">
+                    <div class="preview-header">
+                        <h3 id="preview-filename">file.txt</h3>
+                        <button class="icon-btn" id="close-preview"><i class="ph ph-x"></i></button>
+                    </div>
+                    <div class="preview-content" id="preview-content">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div class="preview-actions">
+                        <a class="btn-accent" id="preview-download" href="#" download>
+                            <i class="ph ph-download-simple"></i> Download
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════ VIEW: CHAT ═══════ -->
+            <div class="view" id="view-chat" style="display:none;">
+                <div class="chat-layout">
+                    <div class="chat-main">
+                        <div class="chat-history" id="chat-history">
+                            <div class="chat-welcome">
+                                <div class="welcome-icon">
+                                    <i class="ph ph-atom" style="font-size:3rem; color: var(--accent);"></i>
+                                </div>
+                                <h2>Hello! I'm AgentOS</h2>
+                                <p>Upload a document and ask me to analyze, summarize, transform, or visualize your data. I'll create a plan, let you review it, and execute it on your behalf.</p>
+                                <div class="welcome-chips">
+                                    <button class="chip" onclick="insertPrompt('Summarize the uploaded financial report')">📊 Summarize a report</button>
+                                    <button class="chip" onclick="insertPrompt('Create a bar chart showing revenue by product')">📈 Create a chart</button>
+                                    <button class="chip" onclick="insertPrompt('Clean the dataset and remove duplicates')">🧹 Clean data</button>
+                                    <button class="chip" onclick="insertPrompt('What files are in my workspace?')">📁 List files</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="chat-input-area">
+                            <div class="chat-input-box">
+                                <button class="chat-attach-btn" id="chat-attach-btn" title="Attach file">
+                                    <i class="ph ph-paperclip"></i>
+                                </button>
+                                <input type="file" id="chat-file-input" style="display:none;" accept=".xlsx,.xls,.csv,.pdf,.txt,.doc,.docx">
+                                <textarea id="chat-input" placeholder="Ask me to analyze, visualize, or transform your data..." rows="1"></textarea>
+                                <button class="chat-send-btn" id="chat-send-btn">
+                                    <i class="ph ph-paper-plane-tilt"></i>
+                                </button>
+                            </div>
+                            <div class="chat-input-footer">
+                                <span class="input-hint">Press Enter to send, Shift+Enter for new line</span>
+                                <span class="token-hint" id="chat-token-hint">Tokens: <span id="chat-tokens-used">0</span> / <span id="chat-tokens-limit">500,000</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Sidebar: Context & Outputs -->
+                    <div class="chat-sidebar">
+                        <div class="chat-sidebar-section">
+                            <h4><i class="ph ph-info"></i> Model Info</h4>
+                            <div class="info-row"><span>Model</span><span class="accent">GPT-5.4 Mini</span></div>
+                            <div class="info-row"><span>Tools</span><span class="accent" id="tools-count">20 Loaded</span></div>
+                            <div class="info-row"><span>Context</span><span class="accent">400K tokens</span></div>
+                        </div>
+                        <div class="chat-sidebar-section">
+                            <h4><i class="ph ph-folder-notch-open"></i> Workspace Files</h4>
+                            <ul class="sidebar-file-list" id="chat-file-list">
+                                <li class="empty-item">No files</li>
+                            </ul>
+                        </div>
+                        <div class="chat-sidebar-section">
+                            <h4><i class="ph ph-image-square"></i> Generated Outputs</h4>
+                            <div id="chat-outputs" class="chat-outputs">
+                                <div class="empty-item">No outputs yet</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════ VIEW: SETTINGS ═══════ -->
+            <div class="view" id="view-settings" style="display:none;">
+                <div class="settings-grid">
+                    <!-- Token Management -->
+                    <section class="panel settings-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-coins"></i> Token Management</h3>
+                        </div>
+                        <div class="token-dashboard">
+                            <div class="token-ring-container">
+                                <svg class="token-ring" viewBox="0 0 120 120">
+                                    <circle class="token-ring-bg" cx="60" cy="60" r="50" />
+                                    <circle class="token-ring-fill" id="token-ring-fill" cx="60" cy="60" r="50" />
+                                </svg>
+                                <div class="token-ring-label">
+                                    <span class="token-ring-value" id="token-ring-value">0%</span>
+                                    <span class="token-ring-sub">used</span>
+                                </div>
+                            </div>
+                            <div class="token-stats">
+                                <div class="token-stat">
+                                    <span class="token-stat-label">Prompt Tokens</span>
+                                    <span class="token-stat-value" id="settings-prompt-tokens">0</span>
+                                </div>
+                                <div class="token-stat">
+                                    <span class="token-stat-label">Completion Tokens</span>
+                                    <span class="token-stat-value" id="settings-completion-tokens">0</span>
+                                </div>
+                                <div class="token-stat">
+                                    <span class="token-stat-label">Total Used</span>
+                                    <span class="token-stat-value accent" id="settings-total-tokens">0</span>
+                                </div>
+                                <div class="token-stat">
+                                    <span class="token-stat-label">Remaining</span>
+                                    <span class="token-stat-value" id="settings-remaining-tokens" style="color: var(--success);">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="token-limit-form">
+                            <label>Token Limit</label>
+                            <div class="limit-input-group">
+                                <input type="number" id="token-limit-input" value="500000" min="1000" step="10000">
+                                <button class="btn-accent" id="update-limit-btn">Update Limit</button>
+                            </div>
+                            <div class="limit-presets">
+                                <button class="preset-btn" onclick="setLimitPreset(100000)">100K</button>
+                                <button class="preset-btn" onclick="setLimitPreset(250000)">250K</button>
+                                <button class="preset-btn active" onclick="setLimitPreset(500000)">500K</button>
+                                <button class="preset-btn" onclick="setLimitPreset(1000000)">1M</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Model & Rate Limit Info -->
+                    <section class="panel settings-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-robot"></i> Model Configuration</h3>
+                        </div>
+                        <div class="config-list">
+                            <div class="config-row">
+                                <span>Model</span>
+                                <span class="config-value">GPT-5.4 Mini</span>
+                            </div>
+                            <div class="config-row">
+                                <span>Provider</span>
+                                <span class="config-value">OpenAI</span>
+                            </div>
+                            <div class="config-row">
+                                <span>Context Window</span>
+                                <span class="config-value">400,000 tokens</span>
+                            </div>
+                            <div class="config-row">
+                                <span>Temperature</span>
+                                <span class="config-value">0 (Deterministic)</span>
+                            </div>
+                            <div class="config-row">
+                                <span>Rate Limit</span>
+                                <span class="config-value">30 req/min</span>
+                            </div>
+                            <div class="config-row">
+                                <span>Execution Timeout</span>
+                                <span class="config-value">120 seconds</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Available Tools -->
+                    <section class="panel settings-panel tools-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-wrench"></i> Available Tools</h3>
+                        </div>
+                        <div class="tools-grid">
+                            <div class="tool-card"><i class="ph ph-file-text"></i><span>Create Text</span></div>
+                            <div class="tool-card"><i class="ph ph-file-text"></i><span>Read Text</span></div>
+                            <div class="tool-card"><i class="ph ph-pencil-simple"></i><span>Modify Text</span></div>
+                            <div class="tool-card"><i class="ph ph-file-xls"></i><span>Create Excel</span></div>
+                            <div class="tool-card"><i class="ph ph-file-xls"></i><span>Read Excel</span></div>
+                            <div class="tool-card"><i class="ph ph-pencil-simple"></i><span>Modify Excel</span></div>
+                            <div class="tool-card"><i class="ph ph-file-csv"></i><span>Create CSV</span></div>
+                            <div class="tool-card"><i class="ph ph-file-csv"></i><span>Read CSV</span></div>
+                            <div class="tool-card"><i class="ph ph-pencil-simple"></i><span>Modify CSV</span></div>
+                            <div class="tool-card"><i class="ph ph-file-pdf"></i><span>Create PDF</span></div>
+                            <div class="tool-card"><i class="ph ph-file-pdf"></i><span>Read PDF</span></div>
+                            <div class="tool-card"><i class="ph ph-pencil-simple"></i><span>Modify PDF</span></div>
+                            <div class="tool-card"><i class="ph ph-magnifying-glass-plus"></i><span>Analyze Data</span></div>
+                            <div class="tool-card"><i class="ph ph-broom"></i><span>Clean Data</span></div>
+                            <div class="tool-card"><i class="ph ph-shuffle"></i><span>Transform</span></div>
+                            <div class="tool-card"><i class="ph ph-chart-bar"></i><span>Bar Chart</span></div>
+                            <div class="tool-card"><i class="ph ph-chart-line-up"></i><span>Line Chart</span></div>
+                            <div class="tool-card"><i class="ph ph-chart-pie-slice"></i><span>Pie Chart</span></div>
+                            <div class="tool-card"><i class="ph ph-chart-bar-horizontal"></i><span>Histogram</span></div>
+                            <div class="tool-card"><i class="ph ph-eye"></i><span>Vision</span></div>
+                        </div>
+                    </section>
+
+                    <!-- Guardrails Info -->
+                    <section class="panel settings-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-shield-check"></i> Guardrails</h3>
+                        </div>
+                        <div class="guardrails-list">
+                            <div class="guardrail-item active">
+                                <i class="ph ph-check-circle"></i>
+                                <div>
+                                    <strong>Token Budget Enforcement</strong>
+                                    <p>Requests are blocked when token limit is reached</p>
+                                </div>
+                            </div>
+                            <div class="guardrail-item active">
+                                <i class="ph ph-check-circle"></i>
+                                <div>
+                                    <strong>Rate Limiting</strong>
+                                    <p>Max 30 requests per minute per session</p>
+                                </div>
+                            </div>
+                            <div class="guardrail-item active">
+                                <i class="ph ph-check-circle"></i>
+                                <div>
+                                    <strong>File Deletion Protection</strong>
+                                    <p>Uploaded and generated files cannot be deleted</p>
+                                </div>
+                            </div>
+                            <div class="guardrail-item active">
+                                <i class="ph ph-check-circle"></i>
+                                <div>
+                                    <strong>Execution Timeout</strong>
+                                    <p>Agent operations timeout after 120 seconds</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ═══════ MODALS ═══════ -->
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="modal-overlay">
+        <span class="modal-close" id="modal-close">&times;</span>
+        <img class="modal-image" id="modal-img">
+    </div>
+
+    <!-- Task Modal -->
+    <div id="task-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-card-header">
+                <h3 id="task-modal-title">Add Task</h3>
+                <button class="icon-btn" id="close-task-modal"><i class="ph ph-x"></i></button>
+            </div>
+            <form id="task-form" onsubmit="return false;">
+                <div class="input-group">
+                    <label for="task-title">Title</label>
+                    <input type="text" id="task-title" placeholder="Task title" required>
+                </div>
+                <div class="input-group">
+                    <label for="task-desc">Description</label>
+                    <textarea id="task-desc" placeholder="Optional description" rows="3"></textarea>
+                </div>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label for="task-date">Date</label>
+                        <input type="date" id="task-date" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="task-priority">Priority</label>
+                        <select id="task-priority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn-accent" id="task-submit-btn" style="width:100%; margin-top:1rem;">Create Task</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
