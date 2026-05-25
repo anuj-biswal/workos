@@ -758,3 +758,144 @@ input:focus, select:focus, textarea:focus {
 .toast.success { border-left-color: var(--success); }
 .toast.error { border-left-color: var(--danger); }
 .toast.warning { border-left-color: var(--warning); }
+
+/* ═══════════════════ ATTACHMENT CHIPS ═══════════════════ */
+.chat-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0.5rem 0;
+}
+.attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem 0.35rem 0.75rem;
+    background: rgba(78, 205, 196, 0.1);
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    animation: slideUp 0.2s ease;
+}
+.attachment-chip i {
+    font-size: 0.9rem;
+    color: var(--accent-teal);
+}
+.attachment-chip .remove-chip {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(26, 26, 46, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    border: none;
+    padding: 0;
+}
+.attachment-chip .remove-chip:hover {
+    background: var(--danger);
+    color: white;
+}
+
+/* ═══════════════════ PLAN STEP BADGES ═══════════════════ */
+.step-category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+}
+.step-category-badge.file {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+}
+.step-category-badge.data {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+.step-category-badge.chart {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+.step-category-badge.vision {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+}
+
+/* ═══════════════════ CLICKABLE FILE LINKS ═══════════════════ */
+.file-link-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.6rem;
+    background: rgba(78, 205, 196, 0.1);
+    border: 1px solid rgba(78, 205, 196, 0.25);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--accent-teal);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    margin: 0.25rem 0.15rem;
+}
+.file-link-chip:hover {
+    background: rgba(78, 205, 196, 0.2);
+    border-color: var(--accent-teal);
+    transform: translateY(-1px);
+}
+.file-link-chip i {
+    font-size: 0.85rem;
+}
+
+/* Sidebar file list clickable */
+.sidebar-file-list li {
+    cursor: pointer;
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+}
+.sidebar-file-list li:hover {
+    background: rgba(78, 205, 196, 0.08);
+    color: var(--accent-teal);
+}
+
+/* Chat outputs clickable items */
+.chat-output-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.65rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+.chat-output-item:hover {
+    border-color: var(--accent-teal);
+    background: rgba(78, 205, 196, 0.05);
+    transform: translateX(2px);
+}
+.chat-output-item i {
+    color: var(--accent-teal);
+    font-size: 1rem;
+}
+.chat-output-item img {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    object-fit: cover;
+}

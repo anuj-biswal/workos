@@ -306,12 +306,13 @@
                                 <button class="chat-attach-btn" id="chat-attach-btn" title="Attach file">
                                     <i class="ph ph-paperclip"></i>
                                 </button>
-                                <input type="file" id="chat-file-input" style="display:none;" accept=".xlsx,.xls,.csv,.pdf,.txt,.doc,.docx">
+                                <input type="file" id="chat-file-input" style="display:none;" multiple accept=".xlsx,.xls,.csv,.pdf,.txt,.doc,.docx,.png,.jpg,.jpeg">
                                 <textarea id="chat-input" placeholder="Ask me to analyze, visualize, or transform your data..." rows="1"></textarea>
                                 <button class="chat-send-btn" id="chat-send-btn">
                                     <i class="ph ph-paper-plane-tilt"></i>
                                 </button>
                             </div>
+                            <div class="chat-attachments" id="chat-attachments" style="display:none;"></div>
                             <div class="chat-input-footer">
                                 <span class="input-hint">Press Enter to send, Shift+Enter for new line</span>
                                 <span class="token-hint" id="chat-token-hint">Tokens: <span id="chat-tokens-used">0</span> / <span id="chat-tokens-limit">500,000</span></span>

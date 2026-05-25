@@ -108,6 +108,12 @@ METHODOLOGY (ReAct — Reason + Act):
 1. **Thought**: Analyze the user's request carefully. Identify what data is needed and which tools are best suited.
 2. **Action**: Select the exact tools needed. Plan the sequence logically.
 
+STEP DESCRIPTIONS (CRITICAL):
+When you decide to use tools, your reply text MUST contain a brief, human-readable summary of your plan. Write it like you are explaining to a colleague what you are about to do, NOT like a system log. For example:
+- GOOD: "I'll read your sales data, identify the key revenue columns, and create a bar chart comparing revenue by product."
+- BAD: "Execute read_csv_file, then execute generate_bar_chart."
+Be conversational, clear, and explain the WHY behind each step.
+
 CRITICAL RULES:
 - If the user asks for a summary or explanation of a chart/image, use the `analyze_image` tool.
 - If you can answer from conversation history alone (no data operations needed), reply directly with NO tool calls.
@@ -127,6 +133,34 @@ def _get_workspace_files(workspace_id: str) -> list[str]:
     if os.path.exists(workspace_path):
         return [f for f in os.listdir(workspace_path) if os.path.isfile(os.path.join(workspace_path, f))]
     return []
+
+def _humanize_tool_call(tool_name: str, args: dict) -> str:
+    """Generate a human-readable description from a tool call."""
+    filename = args.get("filename", "")
+    labels = {
+        "read_text_file": f"Read and review the contents of '{filename}'",
+        "create_text_file": f"Create a new text file '{filename}'",
+        "modify_text_file": f"Update the contents of '{filename}'",
+        "read_csv_file": f"Read and analyze the CSV data in '{filename}'",
+        "create_csv_file": f"Create a new CSV file '{filename}'",
+        "modify_csv_file": f"Update the CSV data in '{filename}'",
+        "read_excel_file": f"Read and analyze the Excel spreadsheet '{filename}'",
+        "create_excel_file": f"Create a new Excel spreadsheet '{filename}'",
+        "modify_excel_file": f"Update the Excel spreadsheet '{filename}'",
+        "read_pdf_file": f"Read and extract text from the PDF '{filename}'",
+        "create_pdf_file": f"Generate a new PDF document '{filename}'",
+        "modify_pdf_file": f"Update the PDF document '{filename}'",
+        "analyze_dataset": f"Analyze the dataset in '{filename}' for key statistics and patterns",
+        "clean_dataset": f"Clean the dataset in '{filename}' by handling missing values and duplicates",
+        "transform_dataset": f"Transform and reshape the data in '{filename}'",
+        "visualize_dataset": f"Create a visualization from the data in '{filename}'",
+        "generate_bar_chart": f"Generate a bar chart from '{filename}'",
+        "generate_line_chart": f"Generate a line chart from '{filename}'",
+        "generate_pie_chart": f"Generate a pie chart from '{filename}'",
+        "generate_histogram": f"Generate a histogram from '{filename}'",
+        "analyze_image": f"Analyze and interpret the image '{filename}'",
+    }
+    return labels.get(tool_name, f"Process '{filename}' using {tool_name.replace('_', ' ')}")
 
 # ── Graph nodes ───────────────────────────────────────────────────────────────
 def planner_node(state: AgentState):
@@ -164,7 +198,7 @@ def planner_node(state: AgentState):
                 "id": tc["id"],
                 "tool": tc["name"],
                 "args": tc["args"],
-                "description": f"Execute {tc['name']}"
+                "description": tc["args"].get("description", "") or _humanize_tool_call(tc["name"], tc["args"])
             })
     
     updates = {

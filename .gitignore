@@ -32,3 +32,8 @@ backend/workspaces/*/
 !backend/workspaces/.keep
 backend/scratch/*/
 !backend/scratch/.keep
+
+# IDE
+.vs/
+.vscode/
+.idea/

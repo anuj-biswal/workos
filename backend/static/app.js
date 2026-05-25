@@ -3,7 +3,8 @@
 // =====================================================================
 const state = {
     user: null, // { name: '', role: '' }
-    currentView: 'dashboard',
+    currentView: 'chat',
+    pendingAttachments: [],
     workspaceId: 'default-workspace',
     files: [],
     activities: [],
@@ -86,8 +87,8 @@ function showApp() {
 function handleRoute() {
     let hash = window.location.hash.replace('#', '');
     if (!['dashboard', 'files', 'chat', 'settings'].includes(hash)) {
-        hash = 'dashboard';
-        window.location.hash = 'dashboard';
+        hash = 'chat';
+        window.location.hash = 'chat';
     }
     
     state.currentView = hash;
@@ -252,11 +253,11 @@ function setupEventListeners() {
         this.style.height = (this.scrollHeight) + 'px';
     });
 
-    // Chat Attachment
+    // Chat Attachment — stage files as chips instead of uploading immediately
     document.getElementById('chat-attach-btn').addEventListener('click', () => {
         document.getElementById('chat-file-input').click();
     });
-    document.getElementById('chat-file-input').addEventListener('change', handleFileUpload);
+    document.getElementById('chat-file-input').addEventListener('change', handleChatFileSelect);
 
     // Image Modal Close
     document.getElementById('modal-close').addEventListener('click', () => {
@@ -433,6 +434,7 @@ function updateSidebarFileList() {
     state.files.forEach(f => {
         const li = document.createElement('li');
         li.innerHTML = `<i class="ph ph-file-text"></i> <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${f}</span>`;
+        li.onclick = () => { navigateTo('files'); setTimeout(() => openFilePreview(f), 150); };
         list.appendChild(li);
     });
 }
@@ -497,12 +499,46 @@ window.insertPrompt = function(text) {
 
 async function sendChatMessage() {
     const inputEl = document.getElementById('chat-input');
-    const text = inputEl.value.trim();
-    if (!text) return;
+    let text = inputEl.value.trim();
+    const hasAttachments = state.pendingAttachments.length > 0;
+    
+    if (!text && !hasAttachments) return;
 
-    appendUserMessage(text);
+    // If user attached files but typed no message, auto-generate one
+    if (!text && hasAttachments) {
+        const names = state.pendingAttachments.map(f => f.name);
+        text = `I've uploaded ${names.join(', ')}. Please analyze ${names.length === 1 ? 'this file' : 'these files'}.`;
+    }
+
+    // Build combined user message with attachment list
+    let displayText = text;
+    if (hasAttachments) {
+        const attachList = state.pendingAttachments.map(f => `📎 ${f.name}`).join('\n');
+        displayText = attachList + '\n\n' + text;
+    }
+    appendUserMessage(displayText);
     inputEl.value = '';
     inputEl.style.height = 'auto';
+
+    // Upload any pending attachments first
+    if (hasAttachments) {
+        const loadingUploadId = appendAgentMessage('📤 Uploading your files...', true);
+        for (const file of state.pendingAttachments) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('workspace_id', state.workspaceId);
+            try {
+                const upRes = await fetch('/api/upload', { method: 'POST', body: formData });
+                const upData = await upRes.json();
+                if (!upRes.ok) showToast(`Failed to upload ${file.name}: ${upData.detail}`, 'error');
+            } catch (err) {
+                showToast(`Upload error: ${file.name}`, 'error');
+            }
+        }
+        removeMessage(loadingUploadId);
+        clearAttachments();
+        await fetchWorkspaceFiles(); // Refresh file lists
+    }
 
     const loadingId = appendAgentMessage("Thinking...", true);
 
@@ -527,7 +563,7 @@ async function sendChatMessage() {
             renderPlan(data.plan);
         }
         
-        fetchTokens(); // Agent call uses tokens
+        fetchTokens();
 
     } catch (e) {
         removeMessage(loadingId);
@@ -581,21 +617,31 @@ function scrollToBottom() {
     h.scrollTop = h.scrollHeight;
 }
 
+function _getToolCategory(toolName) {
+    if (toolName.includes('chart') || toolName.includes('histogram') || toolName.includes('visualize')) return { label: 'Chart', icon: 'ph-chart-bar', cls: 'chart' };
+    if (toolName.includes('analyze_dataset') || toolName.includes('clean') || toolName.includes('transform')) return { label: 'Data', icon: 'ph-database', cls: 'data' };
+    if (toolName.includes('image') || toolName.includes('vision')) return { label: 'Vision', icon: 'ph-eye', cls: 'vision' };
+    return { label: 'File', icon: 'ph-file-text', cls: 'file' };
+}
+
 function renderPlan(planSteps) {
     const planId = 'plan-' + Date.now();
     const history = document.getElementById('chat-history');
     const div = document.createElement('div');
     div.className = 'message agent';
     
-    let stepsHtml = planSteps.map((step, idx) => `
+    let stepsHtml = planSteps.map((step, idx) => {
+        const cat = _getToolCategory(step.tool);
+        return `
         <div class="plan-step">
             <div class="step-number">${idx + 1}</div>
             <div style="flex: 1;">
-                <div class="step-tool">${step.tool}</div>
+                <span class="step-category-badge ${cat.cls}"><i class="ph ${cat.icon}"></i> ${cat.label}</span>
                 <div class="step-desc" contenteditable="true" data-step-idx="${idx}">${escapeHtml(step.description)}</div>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 
     const encodedSteps = btoa(unescape(encodeURIComponent(JSON.stringify(planSteps))));
 
@@ -604,7 +650,7 @@ function renderPlan(planSteps) {
         <div style="flex:1;">
             <div class="plan-container">
                 <div class="plan-header">
-                    <span style="font-weight: 600; font-size: 0.9rem;"><i class="ph ph-list-numbers"></i> Execution Plan</span>
+                    <span style="font-weight: 600; font-size: 0.9rem;"><i class="ph ph-list-numbers"></i> Here's my plan</span>
                     <button class="btn-accent btn-sm approve-btn" onclick="executePlan('${planId}')">Approve & Execute</button>
                 </div>
                 <div id="${planId}" data-steps="${encodedSteps}">
@@ -661,18 +707,27 @@ window.executePlan = async function(planId) {
         btn.style.background = 'var(--success)';
         
         let resultHtml = "<strong>Execution completed.</strong><br><br>";
+        const generatedFiles = [];
         if (result.results && result.results.length > 0) {
             result.results.forEach(r => {
                 let status = r.status === 'success' ? '<span style="color:var(--success)">✅</span>' : '<span style="color:var(--danger)">❌</span>';
-                let output = `<pre style="white-space: pre-wrap; font-size: 0.8rem; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; margin-top: 4px; border: 1px solid var(--border-color);">${escapeHtml(r.output)}</pre>`;
                 
-                // Image detection
+                // Detect ALL generated filenames in output
+                let outputText = escapeHtml(r.output);
+                const filePattern = /([a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg|csv|xlsx|xls|pdf|txt))/gi;
+                outputText = outputText.replace(filePattern, (match) => {
+                    if (!generatedFiles.includes(match)) generatedFiles.push(match);
+                    return `<span class="file-link-chip" onclick="navigateTo('files'); setTimeout(() => openFilePreview('${match}'), 150);"><i class="ph ph-file-text"></i> ${match}</span>`;
+                });
+                
+                let output = `<pre style="white-space: pre-wrap; font-size: 0.8rem; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; margin-top: 4px; border: 1px solid var(--border-color);">${outputText}</pre>`;
+                
+                // Image detection — show inline preview
                 if (r.status === 'success') {
                     const imgMatch = r.output.match(/([a-zA-Z0-9_\-\.]+\.(?:png|jpg|jpeg|gif|svg))/i);
                     if (imgMatch) {
                         const fileUrl = `/api/workspace/${state.workspaceId}/download/${imgMatch[1]}`;
                         output += `<img src="${fileUrl}" style="max-width:100%; border-radius:8px; margin-top:10px; border:1px solid var(--border-color); cursor:zoom-in;" onclick="openImageModal('${fileUrl}')">`;
-                        addOutputImageToSidebar(fileUrl);
                     }
                 }
                 resultHtml += `<div style="margin-bottom:1rem;">${status} <strong>Step:</strong> ${r.step_id} <br>${output}</div>`;
@@ -680,6 +735,11 @@ window.executePlan = async function(planId) {
         }
         
         appendAgentMessage(resultHtml);
+        
+        // Add all generated files to the sidebar
+        if (generatedFiles.length > 0) {
+            addOutputFilesToSidebar(generatedFiles);
+        }
         if (result.reply) appendAgentMessage(result.reply);
         
         fetchAllData(); // Refresh UI
@@ -691,19 +751,41 @@ window.executePlan = async function(planId) {
     }
 }
 
-function addOutputImageToSidebar(url) {
+function addOutputFilesToSidebar(filenames) {
     const container = document.getElementById('chat-outputs');
     if (!container) return;
     if (container.querySelector('.empty-item')) container.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = url;
-    img.style.maxWidth = '100%';
-    img.style.borderRadius = 'var(--radius-sm)';
-    img.style.marginTop = '10px';
-    img.style.cursor = 'zoom-in';
-    img.style.border = '1px solid var(--border-color)';
-    img.onclick = () => openImageModal(url);
-    container.appendChild(img);
+    
+    filenames.forEach(filename => {
+        const ext = filename.split('.').pop().toLowerCase();
+        const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext);
+        
+        let icon = 'ph-file';
+        if (['xls','xlsx'].includes(ext)) icon = 'ph-file-xls';
+        else if (ext === 'csv') icon = 'ph-file-csv';
+        else if (ext === 'pdf') icon = 'ph-file-pdf';
+        else if (isImage) icon = 'ph-image';
+        
+        const item = document.createElement('div');
+        item.className = 'chat-output-item';
+        item.onclick = () => { navigateTo('files'); setTimeout(() => openFilePreview(filename), 150); };
+        
+        if (isImage) {
+            const fileUrl = `/api/workspace/${state.workspaceId}/download/${filename}`;
+            item.innerHTML = `<img src="${fileUrl}" alt="${filename}"> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${filename}</span>`;
+        } else {
+            item.innerHTML = `<i class="ph ${icon}"></i> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${filename}</span>`;
+        }
+        container.appendChild(item);
+    });
+}
+
+// Legacy compat
+function addOutputImageToSidebar(url) {
+    // Extract filename from URL
+    const parts = url.split('/');
+    const filename = parts[parts.length - 1];
+    addOutputFilesToSidebar([filename]);
 }
 
 // =====================================================================
@@ -1046,4 +1128,63 @@ function escapeHtml(unsafe) {
          .replace(/>/g, "&gt;")
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
+}
+
+// =====================================================================
+// ATTACHMENT CHIPS (Chat file staging)
+// =====================================================================
+function handleChatFileSelect(e) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const maxFiles = 5;
+    const totalWillBe = state.pendingAttachments.length + files.length;
+    
+    if (totalWillBe > maxFiles) {
+        showToast(`Maximum ${maxFiles} files allowed. You can attach ${maxFiles - state.pendingAttachments.length} more.`, 'warning');
+    }
+    
+    for (let i = 0; i < files.length && state.pendingAttachments.length < maxFiles; i++) {
+        state.pendingAttachments.push(files[i]);
+    }
+    
+    e.target.value = ''; // Reset input
+    renderAttachmentChips();
+}
+
+function renderAttachmentChips() {
+    const container = document.getElementById('chat-attachments');
+    if (!container) return;
+    
+    if (state.pendingAttachments.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+    
+    container.style.display = 'flex';
+    container.innerHTML = state.pendingAttachments.map((file, idx) => {
+        const ext = file.name.split('.').pop().toLowerCase();
+        let icon = 'ph-file';
+        if (['xls','xlsx'].includes(ext)) icon = 'ph-file-xls';
+        else if (ext === 'csv') icon = 'ph-file-csv';
+        else if (ext === 'pdf') icon = 'ph-file-pdf';
+        else if (['png','jpg','jpeg','gif'].includes(ext)) icon = 'ph-image';
+        
+        return `<div class="attachment-chip">
+            <i class="ph ${icon}"></i>
+            <span>${escapeHtml(file.name)}</span>
+            <button class="remove-chip" onclick="removeAttachment(${idx})" title="Remove">✕</button>
+        </div>`;
+    }).join('');
+}
+
+window.removeAttachment = function(idx) {
+    state.pendingAttachments.splice(idx, 1);
+    renderAttachmentChips();
+};
+
+function clearAttachments() {
+    state.pendingAttachments = [];
+    renderAttachmentChips();
 }
