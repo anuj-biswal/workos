@@ -265,12 +265,19 @@ async def preview_file(workspace_id: str, filename: str):
             return {"type": "image", "content": f"data:{mime};base64,{b64}"}
         
         elif ftype == "pdf":
-            import PyPDF2
-            with open(file_path, "rb") as f:
-                reader = PyPDF2.PdfReader(f)
-                text = ""
-                for page in reader.pages[:5]:
-                    text += page.extract_text() + "\n"
+            try:
+                import pdfplumber
+                with pdfplumber.open(file_path) as pdf:
+                    text = ""
+                    for page in pdf.pages[:5]:
+                        text += (page.extract_text() or "") + "\n"
+            except ImportError:
+                import PyPDF2
+                with open(file_path, "rb") as f:
+                    reader = PyPDF2.PdfReader(f)
+                    text = ""
+                    for page in reader.pages[:5]:
+                        text += page.extract_text() + "\n"
             return {"type": "text", "content": text}
         
         else:

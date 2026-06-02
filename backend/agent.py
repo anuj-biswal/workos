@@ -12,7 +12,7 @@ import time
 from tools.file_tools import (
     create_text_file, read_text_file, modify_text_file,
     create_excel_file, read_excel_file, modify_excel_file,
-    create_pdf_file, read_pdf_file, modify_pdf_file
+    create_pdf_file, read_pdf_file, read_pdf_advanced, modify_pdf_file
 )
 from tools.csv_tools import (
     create_csv_file, read_csv_file, modify_csv_file
@@ -77,7 +77,7 @@ def log_activity(action: str, detail: str = "", meta: dict | None = None):
 ALL_TOOLS = [
     create_text_file, read_text_file, modify_text_file,
     create_excel_file, read_excel_file, modify_excel_file,
-    create_pdf_file, read_pdf_file, modify_pdf_file,
+    create_pdf_file, read_pdf_file, read_pdf_advanced, modify_pdf_file,
     create_csv_file, read_csv_file, modify_csv_file,
     analyze_dataset, clean_dataset, transform_dataset, visualize_dataset,
     generate_bar_chart, generate_line_chart, generate_pie_chart, generate_histogram,
@@ -125,6 +125,7 @@ CRITICAL RULES:
 - Be professional, concise, and analytical.
 - When summarizing data or reports, be thorough: mention key findings, notable trends, and actionable insights.
 - When the user asks about specific data, determine which workspace file is most relevant based on the file list provided.
+- For PDF reading, use `read_pdf_file` (pdfplumber) by default. Only use `read_pdf_advanced` (Docling) when the user specifically requests deep/advanced parsing, or when dealing with scanned documents, scientific papers, or complex multi-column layouts.
 """
 
 def _get_workspace_files(workspace_id: str) -> list[str]:
@@ -148,6 +149,7 @@ def _humanize_tool_call(tool_name: str, args: dict) -> str:
         "create_excel_file": f"Create a new Excel spreadsheet '{filename}'",
         "modify_excel_file": f"Update the Excel spreadsheet '{filename}'",
         "read_pdf_file": f"Read and extract text from the PDF '{filename}'",
+        "read_pdf_advanced": f"Deep-parse the complex PDF '{filename}' using AI (Docling)",
         "create_pdf_file": f"Generate a new PDF document '{filename}'",
         "modify_pdf_file": f"Update the PDF document '{filename}'",
         "analyze_dataset": f"Analyze the dataset in '{filename}' for key statistics and patterns",
@@ -201,6 +203,19 @@ def planner_node(state: AgentState):
                 "description": tc["args"].get("description", "") or _humanize_tool_call(tc["name"], tc["args"])
             })
     
+    # If the LLM provided a reply alongside tool calls, add a final
+    # "Synthesize & Respond" step so the user sees the FULL plan
+    # (e.g. "...then I'll compare the two reports and highlight differences").
+    if plan and hasattr(response, "content") and response.content:
+        reply_text = response.content.strip()
+        if reply_text:
+            plan.append({
+                "id": "synthesize",
+                "tool": "__synthesize__",
+                "args": {},
+                "description": reply_text,
+            })
+
     updates = {
         "plan": plan,
         "planner_response": response,
@@ -232,6 +247,11 @@ def executor_node(state: AgentState):
     
     for step in state.get("plan", []):
         tool_name = step.get("tool")
+
+        # Skip the synthesize display-only step
+        if tool_name == "__synthesize__":
+            continue
+
         tool_func = TOOL_MAP.get(tool_name)
         tool_call_id = step.get("id", "custom")
         

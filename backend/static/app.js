@@ -583,15 +583,33 @@ function appendUserMessage(text) {
     scrollToBottom();
 }
 
+function renderMarkdown(text) {
+    // If text already contains HTML tags (e.g. from execution results with images),
+    // return as-is to avoid double-encoding
+    if (/<[a-z][\s\S]*>/i.test(text) && !text.startsWith('#') && !text.startsWith('-') && !text.startsWith('*')) {
+        return text;
+    }
+    // Use marked.js to parse markdown into HTML
+    if (typeof marked !== 'undefined') {
+        try {
+            return marked.parse(text);
+        } catch(e) {
+            return escapeHtml(text);
+        }
+    }
+    return escapeHtml(text);
+}
+
 function appendAgentMessage(text, isLoading = false) {
     const history = document.getElementById('chat-history');
     const id = 'msg-' + Date.now();
     const div = document.createElement('div');
     div.className = 'message agent';
     div.id = id;
+    const rendered = isLoading ? text : renderMarkdown(text);
     div.innerHTML = `
         <div class="message-avatar"><i class="ph ph-robot" style="${isLoading ? 'animation: pulse 1s infinite;' : ''}"></i></div>
-        <div class="message-content" style="${isLoading ? 'opacity: 0.7;' : ''}">${text}</div>
+        <div class="message-content markdown-body" style="${isLoading ? 'opacity: 0.7;' : ''}">${rendered}</div>
     `;
     history.appendChild(div);
     scrollToBottom();
@@ -618,6 +636,7 @@ function scrollToBottom() {
 }
 
 function _getToolCategory(toolName) {
+    if (toolName === '__synthesize__') return { label: 'Synthesize & Respond', icon: 'ph-brain', cls: 'synthesize' };
     if (toolName.includes('chart') || toolName.includes('histogram') || toolName.includes('visualize')) return { label: 'Chart', icon: 'ph-chart-bar', cls: 'chart' };
     if (toolName.includes('analyze_dataset') || toolName.includes('clean') || toolName.includes('transform')) return { label: 'Data', icon: 'ph-database', cls: 'data' };
     if (toolName.includes('image') || toolName.includes('vision')) return { label: 'Vision', icon: 'ph-eye', cls: 'vision' };
@@ -629,8 +648,12 @@ function renderPlan(planSteps) {
     const history = document.getElementById('chat-history');
     const div = document.createElement('div');
     div.className = 'message agent';
+
+    // Separate tool steps from the synthesize step
+    const toolSteps = planSteps.filter(s => s.tool !== '__synthesize__');
+    const synthStep = planSteps.find(s => s.tool === '__synthesize__');
     
-    let stepsHtml = planSteps.map((step, idx) => {
+    let stepsHtml = toolSteps.map((step, idx) => {
         const cat = _getToolCategory(step.tool);
         return `
         <div class="plan-step">
@@ -642,6 +665,20 @@ function renderPlan(planSteps) {
         </div>
     `;
     }).join('');
+
+    // Add the synthesize step with a distinct style
+    if (synthStep) {
+        const synthIdx = toolSteps.length;
+        stepsHtml += `
+        <div class="plan-step synthesize-step">
+            <div class="step-number" style="background: linear-gradient(135deg, var(--accent), #a855f7);">${synthIdx + 1}</div>
+            <div style="flex: 1;">
+                <span class="step-category-badge synthesize"><i class="ph ph-brain"></i> Synthesize & Respond</span>
+                <div class="step-desc">${escapeHtml(synthStep.description)}</div>
+            </div>
+        </div>
+    `;
+    }
 
     const encodedSteps = btoa(unescape(encodeURIComponent(JSON.stringify(planSteps))));
 
@@ -685,14 +722,19 @@ window.executePlan = async function(planId) {
     const stepsDivs = container.querySelectorAll('.step-desc');
     stepsDivs.forEach((div) => {
         const idx = parseInt(div.getAttribute('data-step-idx'));
-        originalSteps[idx].description = div.innerText; // Get edited text
+        if (idx < originalSteps.length) {
+            originalSteps[idx].description = div.innerText; // Get edited text
+        }
     });
+
+    // Filter out the synthesize display-only step before sending to backend
+    const executableSteps = originalSteps.filter(s => s.tool !== '__synthesize__');
 
     try {
         const res = await fetch('/api/execute', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plan_steps: originalSteps, workspace_id: state.workspaceId })
+            body: JSON.stringify({ plan_steps: executableSteps, workspace_id: state.workspaceId })
         });
         const result = await res.json();
 
@@ -706,41 +748,50 @@ window.executePlan = async function(planId) {
         btn.textContent = "✅ Completed";
         btn.style.background = 'var(--success)';
         
-        let resultHtml = "<strong>Execution completed.</strong><br><br>";
+        // Collect generated files and errors from step results
         const generatedFiles = [];
+        const errors = [];
         if (result.results && result.results.length > 0) {
             result.results.forEach(r => {
-                let status = r.status === 'success' ? '<span style="color:var(--success)">✅</span>' : '<span style="color:var(--danger)">❌</span>';
-                
-                // Detect ALL generated filenames in output
-                let outputText = escapeHtml(r.output);
+                // Detect generated filenames
                 const filePattern = /([a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg|csv|xlsx|xls|pdf|txt))/gi;
-                outputText = outputText.replace(filePattern, (match) => {
-                    if (!generatedFiles.includes(match)) generatedFiles.push(match);
-                    return `<span class="file-link-chip" onclick="navigateTo('files'); setTimeout(() => openFilePreview('${match}'), 150);"><i class="ph ph-file-text"></i> ${match}</span>`;
-                });
-                
-                let output = `<pre style="white-space: pre-wrap; font-size: 0.8rem; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; margin-top: 4px; border: 1px solid var(--border-color);">${outputText}</pre>`;
-                
-                // Image detection — show inline preview
-                if (r.status === 'success') {
-                    const imgMatch = r.output.match(/([a-zA-Z0-9_\-\.]+\.(?:png|jpg|jpeg|gif|svg))/i);
-                    if (imgMatch) {
-                        const fileUrl = `/api/workspace/${state.workspaceId}/download/${imgMatch[1]}`;
-                        output += `<img src="${fileUrl}" style="max-width:100%; border-radius:8px; margin-top:10px; border:1px solid var(--border-color); cursor:zoom-in;" onclick="openImageModal('${fileUrl}')">`;
-                    }
+                let match;
+                while ((match = filePattern.exec(r.output)) !== null) {
+                    if (!generatedFiles.includes(match[1])) generatedFiles.push(match[1]);
                 }
-                resultHtml += `<div style="margin-bottom:1rem;">${status} <strong>Step:</strong> ${r.step_id} <br>${output}</div>`;
+                if (r.status === 'error') {
+                    errors.push(r);
+                }
             });
         }
-        
-        appendAgentMessage(resultHtml);
-        
-        // Add all generated files to the sidebar
+
+        // Show the LLM's final reply as the primary output
+        if (result.reply) {
+            appendAgentMessage(result.reply);
+        } else if (errors.length > 0) {
+            // If no reply but there were errors, show them
+            let errorHtml = '<strong>⚠️ Some steps encountered errors:</strong><br><br>';
+            errors.forEach(r => {
+                errorHtml += `<div style="margin-bottom:0.5rem;"><span style="color:var(--danger)">❌</span> <strong>${escapeHtml(r.tool)}</strong>: ${escapeHtml(r.output)}</div>`;
+            });
+            appendAgentMessage(errorHtml);
+        } else {
+            appendAgentMessage('✅ Execution completed successfully.');
+        }
+
+        // Show inline preview for any generated images
         if (generatedFiles.length > 0) {
+            const imageFiles = generatedFiles.filter(f => /\.(png|jpg|jpeg|gif|svg)$/i.test(f));
+            if (imageFiles.length > 0) {
+                let imgHtml = '';
+                imageFiles.forEach(img => {
+                    const fileUrl = `/api/workspace/${state.workspaceId}/download/${img}`;
+                    imgHtml += `<div style="margin-top:10px;"><img src="${fileUrl}" style="max-width:100%; border-radius:8px; border:1px solid var(--border-color); cursor:zoom-in;" onclick="openImageModal('${fileUrl}')"><div style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;"><span class="file-link-chip" onclick="navigateTo('files'); setTimeout(() => openFilePreview('${img}'), 150);"><i class="ph ph-file-text"></i> ${img}</span></div></div>`;
+                });
+                appendAgentMessage(imgHtml);
+            }
             addOutputFilesToSidebar(generatedFiles);
         }
-        if (result.reply) appendAgentMessage(result.reply);
         
         fetchAllData(); // Refresh UI
 

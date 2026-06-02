@@ -96,9 +96,32 @@ def create_pdf_file(filename: str, content: str, workspace_id: str = "default-wo
 
 @tool
 def read_pdf_file(filename: str, workspace_id: str = "default-workspace") -> str:
-    """Read text from a PDF file."""
+    """Read text from a PDF file. Uses pdfplumber for high-quality text and table extraction."""
     try:
         path = get_file_path(workspace_id, filename)
+        # Primary: pdfplumber (best quality for text + tables)
+        try:
+            import pdfplumber
+            text_parts = []
+            with pdfplumber.open(path) as pdf:
+                for i, page in enumerate(pdf.pages):
+                    page_text = page.extract_text() or ""
+                    # Also extract tables if present
+                    tables = page.extract_tables()
+                    if tables:
+                        for table in tables:
+                            # Convert table to readable format
+                            table_str = "\n"
+                            for row in table:
+                                cleaned = [str(cell).strip() if cell else "" for cell in row]
+                                table_str += " | ".join(cleaned) + "\n"
+                            page_text += table_str
+                    if page_text.strip():
+                        text_parts.append(page_text.strip())
+            return "\n\n".join(text_parts)
+        except ImportError:
+            pass
+        # Fallback: PyPDF2
         import PyPDF2
         with open(path, 'rb') as f:
             reader = PyPDF2.PdfReader(f)
@@ -110,6 +133,27 @@ def read_pdf_file(filename: str, workspace_id: str = "default-workspace") -> str
         return f"Error reading PDF: {e}"
 
 @tool
+def read_pdf_advanced(filename: str, workspace_id: str = "default-workspace") -> str:
+    """Read a complex PDF using Docling (AI-powered). Best for scanned docs, scientific papers, complex tables, and multi-column layouts. Falls back to pdfplumber if Docling is unavailable."""
+    try:
+        path = get_file_path(workspace_id, filename)
+        try:
+            from docling.document_converter import DocumentConverter
+            converter = DocumentConverter()
+            result = converter.convert(path)
+            return result.document.export_to_markdown()
+        except ImportError:
+            # Fallback to pdfplumber
+            return read_pdf_file.invoke({"filename": filename, "workspace_id": workspace_id})
+        except Exception as e:
+            # If Docling fails on this particular doc, fall back
+            fallback = read_pdf_file.invoke({"filename": filename, "workspace_id": workspace_id})
+            return f"(Docling failed: {e} — fell back to pdfplumber)\n\n{fallback}"
+    except Exception as e:
+        return f"Error reading PDF with advanced parser: {e}"
+
+@tool
 def modify_pdf_file(filename: str, content: str, workspace_id: str = "default-workspace") -> str:
     """Overwrite a PDF file with new text content."""
     return create_pdf_file.invoke({"filename": filename, "content": content, "workspace_id": workspace_id})
+
