@@ -111,7 +111,12 @@ async def chat(req: ChatRequest):
         current_state = graph.get_state(config)
         plan = current_state.values.get("plan", [])
         messages = current_state.values.get("messages", [])
-        last_message_content = messages[-1].content if messages else ""
+        
+        last_message_content = ""
+        from langchain_core.messages import AIMessage
+        if not plan and messages and isinstance(messages[-1], AIMessage):
+            last_message_content = messages[-1].content
+            
         token_snap = current_state.values.get("token_usage_snapshot", {})
         return plan, last_message_content, token_snap
 
@@ -154,16 +159,29 @@ async def execute_plan(req: PlanApproval):
 
     def _run_executor():
         graph.update_state(config, {"plan": req.plan_steps})
-        for _ in graph.stream(None, config):
-            pass
-        current_state = graph.get_state(config)
+        all_results = []
+        
+        max_loops = 5
+        for _ in range(max_loops):
+            for _ in graph.stream(None, config):
+                pass
+            current_state = graph.get_state(config)
+            
+            # Accumulate results from this iteration
+            iteration_results = current_state.values.get("results", [])
+            all_results.extend(iteration_results)
+            
+            # If the graph has reached END, it will have no next nodes
+            if not current_state.next:
+                break
+                
         messages = current_state.values.get("messages", [])
         last_message_content = ""
         from langchain_core.messages import AIMessage
         if messages and isinstance(messages[-1], AIMessage) and not getattr(messages[-1], "tool_calls", None):
             last_message_content = messages[-1].content
             
-        return current_state.values.get("results", []), last_message_content
+        return all_results, last_message_content
 
     try:
         loop = asyncio.get_event_loop()
