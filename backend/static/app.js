@@ -584,11 +584,6 @@ function appendUserMessage(text) {
 }
 
 function renderMarkdown(text) {
-    // If text already contains HTML tags (e.g. from execution results with images),
-    // return as-is to avoid double-encoding
-    if (/<[a-z][\s\S]*>/i.test(text) && !text.startsWith('#') && !text.startsWith('-') && !text.startsWith('*')) {
-        return text;
-    }
     // Use marked.js to parse markdown into HTML
     if (typeof marked !== 'undefined') {
         try {
@@ -600,13 +595,20 @@ function renderMarkdown(text) {
     return escapeHtml(text);
 }
 
-function appendAgentMessage(text, isLoading = false) {
+function appendAgentMessage(text, isLoading = false, isRawHtml = false) {
     const history = document.getElementById('chat-history');
     const id = 'msg-' + Date.now();
     const div = document.createElement('div');
     div.className = 'message agent';
     div.id = id;
-    const rendered = isLoading ? text : renderMarkdown(text);
+    
+    let rendered;
+    if (isLoading || isRawHtml) {
+        rendered = text;
+    } else {
+        rendered = renderMarkdown(text);
+    }
+    
     div.innerHTML = `
         <div class="message-avatar"><i class="ph ph-robot" style="${isLoading ? 'animation: pulse 1s infinite;' : ''}"></i></div>
         <div class="message-content markdown-body" style="${isLoading ? 'opacity: 0.7;' : ''}">${rendered}</div>
@@ -753,11 +755,14 @@ window.executePlan = async function(planId) {
         const errors = [];
         if (result.results && result.results.length > 0) {
             result.results.forEach(r => {
-                // Detect generated filenames
-                const filePattern = /([a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg|csv|xlsx|xls|pdf|txt))/gi;
-                let match;
-                while ((match = filePattern.exec(r.output)) !== null) {
-                    if (!generatedFiles.includes(match[1])) generatedFiles.push(match[1]);
+                // Detect generated filenames only for tools that create/modify/generate files
+                // or if the output specifically states "Successfully"
+                if (r.tool.startsWith('create_') || r.tool.startsWith('generate_') || r.tool.startsWith('modify_') || r.output.includes('Successfully')) {
+                    const filePattern = /([a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg|csv|xlsx|xls|pdf|txt))/gi;
+                    let match;
+                    while ((match = filePattern.exec(r.output)) !== null) {
+                        if (!generatedFiles.includes(match[1])) generatedFiles.push(match[1]);
+                    }
                 }
                 if (r.status === 'error') {
                     errors.push(r);
@@ -774,7 +779,7 @@ window.executePlan = async function(planId) {
             errors.forEach(r => {
                 errorHtml += `<div style="margin-bottom:0.5rem;"><span style="color:var(--danger)">❌</span> <strong>${escapeHtml(r.tool)}</strong>: ${escapeHtml(r.output)}</div>`;
             });
-            appendAgentMessage(errorHtml);
+            appendAgentMessage(errorHtml, false, true);
         } else {
             appendAgentMessage('✅ Execution completed successfully.');
         }
@@ -788,7 +793,7 @@ window.executePlan = async function(planId) {
                     const fileUrl = `/api/workspace/${state.workspaceId}/download/${img}`;
                     imgHtml += `<div style="margin-top:10px;"><img src="${fileUrl}" style="max-width:100%; border-radius:8px; border:1px solid var(--border-color); cursor:zoom-in;" onclick="openImageModal('${fileUrl}')"><div style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;"><span class="file-link-chip" onclick="navigateTo('files'); setTimeout(() => openFilePreview('${img}'), 150);"><i class="ph ph-file-text"></i> ${img}</span></div></div>`;
                 });
-                appendAgentMessage(imgHtml);
+                appendAgentMessage(imgHtml, false, true);
             }
             addOutputFilesToSidebar(generatedFiles);
         }
