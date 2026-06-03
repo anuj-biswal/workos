@@ -12,7 +12,6 @@ matplotlib==3.8.3
 seaborn>=0.13.0
 PyPDF2==3.0.1
 pdfplumber>=0.10.0
-docling>=2.0.0
 openpyxl==3.1.2
 reportlab==4.1.0
 Pillow==10.2.0
