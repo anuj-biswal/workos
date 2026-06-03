@@ -20,15 +20,37 @@ def _load_dataframe(workspace_id: str, dataset_filename: str) -> pd.DataFrame:
 
 @tool
 def generate_bar_chart(dataset_filename: str, x_column: str, y_column: str, output_filename: str, title: str = "", workspace_id: str = "default-workspace") -> str:
-    """Generate a bar chart from a dataset and save it as an image (e.g. .png)."""
+    """Generate a bar chart from a dataset and save it as an image (e.g. .png).
+    
+    For standard vertical bar charts, x_column should be the category and y_column the numeric value.
+    """
     try:
         df = _load_dataframe(workspace_id, dataset_filename)
-        plt.figure(figsize=(10, 6))
-        sns.barplot(data=df, x=x_column, y=y_column, palette="viridis")
-        plt.title(title or f"{y_column} by {x_column}", fontsize=14, fontweight='bold')
-        plt.xlabel(x_column, fontsize=12)
-        plt.ylabel(y_column, fontsize=12)
-        plt.xticks(rotation=45, ha='right')
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Determine if we need a horizontal or vertical bar chart
+        x_is_numeric = pd.api.types.is_numeric_dtype(df[x_column])
+        y_is_numeric = pd.api.types.is_numeric_dtype(df[y_column])
+        
+        if y_is_numeric and not x_is_numeric:
+            # Standard vertical bar chart: categories on X, values on Y
+            sns.barplot(data=df, x=x_column, y=y_column, palette="viridis", ax=ax)
+            ax.set_xlabel(x_column, fontsize=12)
+            ax.set_ylabel(y_column, fontsize=12)
+            plt.xticks(rotation=45, ha='right')
+        elif x_is_numeric and not y_is_numeric:
+            # Horizontal bar chart: categories on Y, values on X
+            sns.barplot(data=df, x=x_column, y=y_column, palette="viridis", orient='h', ax=ax)
+            ax.set_xlabel(x_column, fontsize=12)
+            ax.set_ylabel(y_column, fontsize=12)
+        else:
+            # Fallback: let seaborn decide, but default to x=category
+            sns.barplot(data=df, x=x_column, y=y_column, palette="viridis", ax=ax)
+            ax.set_xlabel(x_column, fontsize=12)
+            ax.set_ylabel(y_column, fontsize=12)
+            plt.xticks(rotation=45, ha='right')
+        
+        ax.set_title(title or f"{y_column} by {x_column}", fontsize=14, fontweight='bold')
         plt.tight_layout()
         
         out_path = get_file_path(workspace_id, output_filename)
