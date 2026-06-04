@@ -267,11 +267,23 @@ def executor_node(state: AgentState):
         tool_func = TOOL_MAP.get(tool_name)
         tool_call_id = step.get("id", "custom")
         
-        if tool_func:
+        if not tool_func:
+            new_messages.append(ToolMessage(content=f"Error: Tool {tool_name} not found", tool_call_id=tool_call_id))
+            results.append({"step_id": tool_call_id, "tool": tool_name, "status": "error", "error_type": "tool_not_found", "output": f"Tool {tool_name} not found", "duration_ms": 0})
+            continue
+
+        # ── Execute with retry logic ─────────────────────────────────
+        max_retries = 2
+        last_error = None
+        last_error_type = "unknown"
+        step_start = time.time()
+        
+        for attempt in range(max_retries + 1):
             try:
                 args = dict(step.get("args", {}))
                 args["workspace_id"] = state["workspace_id"]
                 res = tool_func.invoke(args)
+                step_duration = round((time.time() - step_start) * 1000, 1)
                 
                 if isinstance(res, str) and res.startswith("IMAGE_REQUEST:"):
                     filename = res.split(":", 1)[1]
@@ -290,23 +302,60 @@ def executor_node(state: AgentState):
                             {"type": "text", "text": f"System: Here is the image {filename} you requested to view:"},
                             {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}}
                         ]))
-                        results.append({"step_id": tool_call_id, "tool": tool_name, "status": "success", "output": f"Image {filename} loaded into context."})
+                        results.append({"step_id": tool_call_id, "tool": tool_name, "status": "success", "output": f"Image {filename} loaded into context.", "duration_ms": step_duration, "retries": attempt})
                         log_activity("tool_exec", f"Loaded image: {filename}")
                     else:
                         new_messages.append(ToolMessage(content="Error: Image file not found.", tool_call_id=tool_call_id))
-                        results.append({"step_id": tool_call_id, "tool": tool_name, "status": "error", "output": f"Image file '{filename}' not found."})
+                        results.append({"step_id": tool_call_id, "tool": tool_name, "status": "error", "error_type": "file_not_found", "output": f"Image file '{filename}' not found.", "duration_ms": step_duration, "retries": attempt})
                 else:
                     out_str = str(res)
                     new_messages.append(ToolMessage(content=out_str, tool_call_id=tool_call_id))
-                    results.append({"step_id": tool_call_id, "tool": tool_name, "status": "success", "output": out_str})
+                    results.append({"step_id": tool_call_id, "tool": tool_name, "status": "success", "output": out_str, "duration_ms": step_duration, "retries": attempt})
                     log_activity("tool_exec", f"Executed {tool_name}", {"output_preview": out_str[:200]})
+                
+                last_error = None
+                break  # success — exit retry loop
+                
             except Exception as e:
-                new_messages.append(ToolMessage(content=f"Error: {str(e)}", tool_call_id=tool_call_id))
-                results.append({"step_id": tool_call_id, "tool": tool_name, "status": "error", "output": str(e)})
-                log_activity("tool_error", f"Error in {tool_name}: {str(e)}")
-        else:
-            new_messages.append(ToolMessage(content=f"Error: Tool {tool_name} not found", tool_call_id=tool_call_id))
-            results.append({"step_id": tool_call_id, "tool": tool_name, "status": "error", "output": f"Tool {tool_name} not found"})
+                last_error = e
+                error_str = str(e)
+                
+                # Classify error type
+                if "rate_limit" in error_str.lower() or "429" in error_str:
+                    last_error_type = "rate_limit"
+                elif "timeout" in error_str.lower() or "timed out" in error_str.lower():
+                    last_error_type = "timeout"
+                elif "api" in error_str.lower() or "connection" in error_str.lower():
+                    last_error_type = "api_error"
+                elif "authentication" in error_str.lower() or "api_key" in error_str.lower():
+                    last_error_type = "auth_error"
+                elif "not found" in error_str.lower() or "does not exist" in error_str.lower():
+                    last_error_type = "not_found"
+                else:
+                    last_error_type = "execution_error"
+                
+                # Only retry on transient errors
+                is_transient = last_error_type in ("rate_limit", "timeout", "api_error")
+                if is_transient and attempt < max_retries:
+                    wait = (attempt + 1) * 2  # 2s, 4s backoff
+                    log_activity("tool_retry", f"Retrying {tool_name} (attempt {attempt+2}/{max_retries+1}) after {wait}s", {"error_type": last_error_type})
+                    time.sleep(wait)
+                    continue
+                
+                # Final failure
+                step_duration = round((time.time() - step_start) * 1000, 1)
+                new_messages.append(ToolMessage(content=f"Error: {error_str}", tool_call_id=tool_call_id))
+                results.append({
+                    "step_id": tool_call_id,
+                    "tool": tool_name,
+                    "status": "error",
+                    "error_type": last_error_type,
+                    "output": error_str,
+                    "duration_ms": step_duration,
+                    "retries": attempt,
+                })
+                log_activity("tool_error", f"Error in {tool_name}: {error_str}", {"error_type": last_error_type, "retries": attempt})
+                break
             
     return {"results": results, "messages": new_messages, "plan": []}
 

@@ -326,23 +326,37 @@ class RAGEngine:
 
     # ── Hybrid Search ────────────────────────────────────────────────────
 
-    def search(self, workspace_id: str, query: str, top_k: int = 8) -> list[dict]:
+    def search(self, workspace_id: str, query: str, top_k: int = 8) -> dict:
         """
         Hybrid search: vector (ChromaDB) + keyword (BM25) with Reciprocal Rank Fusion.
         
-        Returns list of {text, filename, page, score, source} dicts, ranked by relevance.
+        Returns dict with:
+            results: list of {text, filename, page, score, id} ranked by relevance
+            diagnostics: {query, latency_ms, vector/bm25 counts, agreement, per_result_debug, ...}
         """
-        collection = self._get_collection(workspace_id)
-        
-        # Check if collection has any documents
-        if collection.count() == 0:
-            return []
+        import time as _time
 
-        n_candidates = min(20, collection.count())
+        t_start = _time.perf_counter()
+        collection = self._get_collection(workspace_id)
+        total_indexed = collection.count()
+
+        # Empty collection fast-path
+        if total_indexed == 0:
+            return {"results": [], "diagnostics": self._empty_diagnostics(query, 0)}
+
+        n_candidates = min(20, total_indexed)
 
         # ── Vector search ────────────────────────────────────────────────
+        t_embed_start = _time.perf_counter()
         try:
             query_embedding = self._embed_query(query)
+        except Exception as e:
+            logger.error(f"Embedding error: {e}")
+            return {"results": [], "diagnostics": self._empty_diagnostics(query, total_indexed, error=str(e))}
+        t_embed_end = _time.perf_counter()
+
+        t_vec_start = _time.perf_counter()
+        try:
             vector_results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=n_candidates,
@@ -351,42 +365,62 @@ class RAGEngine:
         except Exception as e:
             logger.error(f"Vector search error: {e}")
             vector_results = {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
+        t_vec_end = _time.perf_counter()
 
         # ── BM25 search ──────────────────────────────────────────────────
+        t_bm25_start = _time.perf_counter()
         bm25_data = self._get_bm25_index(workspace_id)
         bm25_results = {"ids": [], "documents": [], "metadatas": [], "scores": []}
         
         if bm25_data:
             tokenized_query = query.lower().split()
             scores = bm25_data["index"].get_scores(tokenized_query)
-            
-            # Get top-n by BM25 score
             top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:n_candidates]
             for idx in top_indices:
                 if scores[idx] > 0:
                     bm25_results["ids"].append(bm25_data["ids"][idx])
                     bm25_results["documents"].append(bm25_data["corpus"][idx])
                     bm25_results["metadatas"].append(bm25_data["metadatas"][idx])
-                    bm25_results["scores"].append(scores[idx])
+                    bm25_results["scores"].append(float(scores[idx]))
+        t_bm25_end = _time.perf_counter()
 
         # ── Reciprocal Rank Fusion ───────────────────────────────────────
+        t_fusion_start = _time.perf_counter()
         k = 60  # RRF constant
         rrf_scores: dict[str, float] = {}
         doc_map: dict[str, dict] = {}
+        vector_ids = set()
+        bm25_ids = set()
+
+        # Build per-result debug info
+        per_result_debug: dict[str, dict] = {}
 
         # Score vector results
         for rank, doc_id in enumerate(vector_results["ids"][0]):
+            vector_ids.add(doc_id)
             rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + 1.0 / (k + rank + 1)
+            idx = rank  # ids are in order
+            cosine_distance = vector_results["distances"][0][idx] if vector_results["distances"][0] else 0
+            cosine_similarity = round(1.0 - cosine_distance, 4)
+
             if doc_id not in doc_map:
-                idx = vector_results["ids"][0].index(doc_id)
                 doc_map[doc_id] = {
                     "text": vector_results["documents"][0][idx],
                     "filename": vector_results["metadatas"][0][idx]["filename"],
                     "page": vector_results["metadatas"][0][idx]["page"],
                 }
+            per_result_debug[doc_id] = {
+                "cosine_distance": round(cosine_distance, 4),
+                "cosine_similarity": cosine_similarity,
+                "bm25_score": 0.0,
+                "vector_rank": rank + 1,
+                "bm25_rank": None,
+                "found_by": ["vector"],
+            }
 
         # Score BM25 results
         for rank, doc_id in enumerate(bm25_results["ids"]):
+            bm25_ids.add(doc_id)
             rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + 1.0 / (k + rank + 1)
             if doc_id not in doc_map:
                 idx = bm25_results["ids"].index(doc_id)
@@ -395,18 +429,103 @@ class RAGEngine:
                     "filename": bm25_results["metadatas"][idx]["filename"],
                     "page": bm25_results["metadatas"][idx]["page"],
                 }
+            bm25_score = bm25_results["scores"][rank]
+            if doc_id in per_result_debug:
+                per_result_debug[doc_id]["bm25_score"] = round(bm25_score, 4)
+                per_result_debug[doc_id]["bm25_rank"] = rank + 1
+                per_result_debug[doc_id]["found_by"].append("bm25")
+            else:
+                per_result_debug[doc_id] = {
+                    "cosine_distance": None,
+                    "cosine_similarity": None,
+                    "bm25_score": round(bm25_score, 4),
+                    "vector_rank": None,
+                    "bm25_rank": rank + 1,
+                    "found_by": ["bm25"],
+                }
 
         # Sort by RRF score and return top_k
         ranked = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
-        
+        t_fusion_end = _time.perf_counter()
+
         results = []
+        final_debug = []
         for doc_id, score in ranked:
             entry = doc_map[doc_id].copy()
             entry["score"] = round(score, 4)
             entry["id"] = doc_id
             results.append(entry)
 
-        return results
+            dbg = per_result_debug.get(doc_id, {}).copy()
+            dbg["id"] = doc_id
+            dbg["rrf_score"] = round(score, 4)
+            dbg["filename"] = entry["filename"]
+            dbg["page"] = entry["page"]
+            final_debug.append(dbg)
+
+        t_end = _time.perf_counter()
+
+        # ── Compute diagnostics ──────────────────────────────────────────
+        overlap = vector_ids & bm25_ids
+        union = vector_ids | bm25_ids
+        agreement_rate = round(len(overlap) / len(union), 4) if union else 0.0
+
+        cosine_sims = [d["cosine_similarity"] for d in final_debug if d.get("cosine_similarity") is not None]
+        bm25_scores_list = [d["bm25_score"] for d in final_debug if d.get("bm25_score", 0) > 0]
+        rrf_scores_list = [d["rrf_score"] for d in final_debug]
+
+        source_files = list(set(r["filename"] for r in results))
+
+        diagnostics = {
+            "query": query,
+            "total_indexed_chunks": total_indexed,
+            "vector_results_count": len(vector_ids),
+            "bm25_results_count": len(bm25_ids),
+            "vector_bm25_overlap": len(overlap),
+            "agreement_rate": agreement_rate,
+            "avg_cosine_similarity": round(sum(cosine_sims) / len(cosine_sims), 4) if cosine_sims else None,
+            "max_cosine_similarity": round(max(cosine_sims), 4) if cosine_sims else None,
+            "avg_bm25_score": round(sum(bm25_scores_list) / len(bm25_scores_list), 4) if bm25_scores_list else None,
+            "max_bm25_score": round(max(bm25_scores_list), 4) if bm25_scores_list else None,
+            "avg_rrf_score": round(sum(rrf_scores_list) / len(rrf_scores_list), 4) if rrf_scores_list else None,
+            "source_diversity": len(source_files),
+            "sources": source_files,
+            "results_returned": len(results),
+            "latency_ms": {
+                "embedding": round((t_embed_end - t_embed_start) * 1000, 1),
+                "vector_search": round((t_vec_end - t_vec_start) * 1000, 1),
+                "bm25_search": round((t_bm25_end - t_bm25_start) * 1000, 1),
+                "fusion": round((t_fusion_end - t_fusion_start) * 1000, 1),
+                "total": round((t_end - t_start) * 1000, 1),
+            },
+            "per_result_debug": final_debug,
+        }
+
+        return {"results": results, "diagnostics": diagnostics}
+
+    def _empty_diagnostics(self, query: str, total_indexed: int, error: str = None) -> dict:
+        """Return an empty diagnostics dict for edge cases."""
+        d = {
+            "query": query,
+            "total_indexed_chunks": total_indexed,
+            "vector_results_count": 0,
+            "bm25_results_count": 0,
+            "vector_bm25_overlap": 0,
+            "agreement_rate": 0.0,
+            "avg_cosine_similarity": None,
+            "max_cosine_similarity": None,
+            "avg_bm25_score": None,
+            "max_bm25_score": None,
+            "avg_rrf_score": None,
+            "source_diversity": 0,
+            "sources": [],
+            "results_returned": 0,
+            "latency_ms": {"embedding": 0, "vector_search": 0, "bm25_search": 0, "fusion": 0, "total": 0},
+            "per_result_debug": [],
+        }
+        if error:
+            d["error"] = error
+        return d
 
     # ── Status ───────────────────────────────────────────────────────────
 

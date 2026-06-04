@@ -128,6 +128,7 @@ function handleRoute() {
         scrollToBottom();
     } else if (hash === 'settings') {
         updateTokenRing();
+        loadRagEvalDashboard();
     }
 }
 
@@ -798,6 +799,11 @@ window.executePlan = async function(planId) {
             }
             addOutputFilesToSidebar(generatedFiles);
         }
+
+        // ── Debug Panel (RAG diagnostics + LLM evaluation) ──────────
+        if (result.debug) {
+            renderDebugPanel(result.debug);
+        }
         
         fetchAllData(); // Refresh UI
 
@@ -1244,4 +1250,212 @@ window.removeAttachment = function(idx) {
 function clearAttachments() {
     state.pendingAttachments = [];
     renderAttachmentChips();
+}
+
+// ═══════════════════ RAG DEBUG PANEL ═══════════════════
+function renderDebugPanel(debug) {
+    const history = document.getElementById('chat-history');
+    const div = document.createElement('div');
+    div.className = 'message agent debug-panel-container';
+    
+    const diag = debug.rag_diagnostics || {};
+    const llmEval = debug.llm_evaluation || {};
+    const errors = debug.errors_encountered || [];
+    const timing = debug.per_step_timing || [];
+    const latency = diag.latency_ms || {};
+    const perResult = diag.per_result_debug || [];
+
+    // Score color helper
+    function scoreColor(score) {
+        if (score === null || score === undefined) return '#6b7280';
+        if (score >= 0.8) return '#10b981';
+        if (score >= 0.5) return '#f59e0b';
+        return '#ef4444';
+    }
+    function scoreBar(score, max, label, color) {
+        const pct = max > 0 ? Math.min((score / max) * 100, 100) : 0;
+        return `<div class="dbg-bar-row"><span class="dbg-bar-label">${label}</span><div class="dbg-bar-track"><div class="dbg-bar-fill" style="width:${pct}%; background:${color || '#06b6d4'}"></div></div><span class="dbg-bar-val">${score !== null && score !== undefined ? score.toFixed(4) : '—'}</span></div>`;
+    }
+
+    // ── Retrieval Metrics Section ────────────────────────────
+    let metricsHtml = `<div class="dbg-section">
+        <div class="dbg-section-title"><i class="ph ph-magnifying-glass"></i> Retrieval Metrics</div>
+        <div class="dbg-grid">
+            <div class="dbg-stat"><span class="dbg-stat-val">${diag.results_returned ?? '—'}</span><span class="dbg-stat-label">Results</span></div>
+            <div class="dbg-stat"><span class="dbg-stat-val">${diag.source_diversity ?? '—'}</span><span class="dbg-stat-label">Sources</span></div>
+            <div class="dbg-stat"><span class="dbg-stat-val">${diag.vector_results_count ?? '—'}</span><span class="dbg-stat-label">Vector Hits</span></div>
+            <div class="dbg-stat"><span class="dbg-stat-val">${diag.bm25_results_count ?? '—'}</span><span class="dbg-stat-label">BM25 Hits</span></div>
+            <div class="dbg-stat"><span class="dbg-stat-val">${diag.vector_bm25_overlap ?? '—'}</span><span class="dbg-stat-label">Overlap</span></div>
+            <div class="dbg-stat"><span class="dbg-stat-val" style="color:${scoreColor(diag.agreement_rate)}">${diag.agreement_rate !== null ? (diag.agreement_rate * 100).toFixed(1) + '%' : '—'}</span><span class="dbg-stat-label">Agreement</span></div>
+        </div>
+        ${scoreBar(diag.avg_cosine_similarity, 1, 'Avg Cosine Sim', '#06b6d4')}
+        ${scoreBar(diag.max_cosine_similarity, 1, 'Max Cosine Sim', '#0ea5e9')}
+        ${scoreBar(diag.avg_bm25_score, diag.max_bm25_score || 20, 'Avg BM25', '#8b5cf6')}
+    </div>`;
+
+    // ── Latency Waterfall ─────────────────────────────────────
+    const totalMs = latency.total || 1;
+    let waterfallHtml = `<div class="dbg-section">
+        <div class="dbg-section-title"><i class="ph ph-timer"></i> Latency Waterfall <span class="dbg-tag">${totalMs.toFixed(0)}ms total</span></div>
+        <div class="dbg-waterfall">`;
+    const stages = [
+        {label: 'Embedding', ms: latency.embedding, color: '#06b6d4'},
+        {label: 'Vector Search', ms: latency.vector_search, color: '#3b82f6'},
+        {label: 'BM25 Search', ms: latency.bm25_search, color: '#8b5cf6'},
+        {label: 'RRF Fusion', ms: latency.fusion, color: '#10b981'},
+    ];
+    stages.forEach(s => {
+        const pct = (s.ms / totalMs * 100).toFixed(1);
+        waterfallHtml += `<div class="dbg-wf-row"><span class="dbg-wf-label">${s.label}</span><div class="dbg-wf-track"><div class="dbg-wf-bar" style="width:${pct}%; background:${s.color}"></div></div><span class="dbg-wf-ms">${(s.ms || 0).toFixed(0)}ms</span></div>`;
+    });
+    waterfallHtml += '</div></div>';
+
+    // ── Per-Result Debug ─────────────────────────────────────
+    let chunksHtml = '';
+    if (perResult.length > 0) {
+        chunksHtml = `<div class="dbg-section"><div class="dbg-section-title"><i class="ph ph-stack"></i> Retrieved Chunks</div><div class="dbg-chunks">`;
+        perResult.forEach((r, i) => {
+            const methods = (r.found_by || []).map(m => `<span class="dbg-method-tag dbg-method-${m}">${m}</span>`).join('');
+            chunksHtml += `<div class="dbg-chunk-card">
+                <div class="dbg-chunk-header"><span class="dbg-chunk-rank">#${i+1}</span> <span class="dbg-chunk-file">${r.filename || '?'}</span> <span class="dbg-chunk-page">p${r.page || '?'}</span> ${methods}</div>
+                ${scoreBar(r.cosine_similarity, 1, 'Cosine', '#06b6d4')}
+                ${scoreBar(r.bm25_score, diag.max_bm25_score || 20, 'BM25', '#8b5cf6')}
+                ${scoreBar(r.rrf_score, 0.035, 'RRF', '#10b981')}
+            </div>`;
+        });
+        chunksHtml += '</div></div>';
+    }
+
+    // ── LLM-as-Judge Evaluation ──────────────────────────────
+    let evalHtml = '';
+    if (llmEval && !llmEval.error) {
+        const faith = llmEval.faithfulness || {};
+        const rel = llmEval.relevancy || {};
+        const cp = llmEval.context_precision || {};
+        evalHtml = `<div class="dbg-section dbg-eval-section">
+            <div class="dbg-section-title"><i class="ph ph-brain"></i> LLM-as-Judge Evaluation <span class="dbg-tag">${(llmEval.eval_latency_ms || 0).toFixed(0)}ms</span></div>
+            <div class="dbg-eval-grid">
+                <div class="dbg-eval-card">
+                    <div class="dbg-eval-score" style="color:${scoreColor(faith.score)}">${faith.score !== null && faith.score !== undefined ? (faith.score * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="dbg-eval-label">Faithfulness</div>
+                    <div class="dbg-eval-desc">${faith.reasoning || ''}</div>
+                </div>
+                <div class="dbg-eval-card">
+                    <div class="dbg-eval-score" style="color:${scoreColor(rel.score)}">${rel.score !== null && rel.score !== undefined ? (rel.score * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="dbg-eval-label">Relevancy</div>
+                    <div class="dbg-eval-desc">${rel.reasoning || ''}</div>
+                </div>
+                <div class="dbg-eval-card">
+                    <div class="dbg-eval-score" style="color:${scoreColor(cp.score)}">${cp.score !== null && cp.score !== undefined ? (cp.score * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="dbg-eval-label">Context Precision</div>
+                    <div class="dbg-eval-desc">${cp.reasoning || ''}</div>
+                </div>
+            </div>
+            ${llmEval.overall_score !== null ? `<div class="dbg-overall">Overall: <strong style="color:${scoreColor(llmEval.overall_score)}">${(llmEval.overall_score * 100).toFixed(0)}%</strong></div>` : ''}
+        </div>`;
+    } else if (llmEval && llmEval.error) {
+        evalHtml = `<div class="dbg-section"><div class="dbg-section-title"><i class="ph ph-brain"></i> LLM Evaluation</div><div class="dbg-error">⚠️ ${llmEval.error}</div></div>`;
+    }
+
+    // ── Errors ────────────────────────────────────────────────
+    let errorsHtml = '';
+    if (errors.length > 0) {
+        errorsHtml = `<div class="dbg-section"><div class="dbg-section-title"><i class="ph ph-warning"></i> Errors Encountered</div>`;
+        errors.forEach(e => {
+            const typeClass = `dbg-err-${e.error_type || 'unknown'}`;
+            errorsHtml += `<div class="dbg-error-row"><span class="dbg-err-badge ${typeClass}">${e.error_type || 'unknown'}</span> <strong>${e.tool}</strong> ${e.retries > 0 ? `<span class="dbg-retry-badge">${e.retries} retries</span>` : ''}</div>`;
+        });
+        errorsHtml += '</div>';
+    }
+
+    // ── Step Timing ──────────────────────────────────────────
+    let timingHtml = '';
+    if (timing.length > 0) {
+        timingHtml = `<div class="dbg-section"><div class="dbg-section-title"><i class="ph ph-clock"></i> Step Timing</div>`;
+        timing.forEach(t => {
+            timingHtml += `<div class="dbg-timing-row"><span class="dbg-timing-tool">${t.tool}</span><span class="dbg-timing-ms">${(t.duration_ms || 0).toFixed(0)}ms</span></div>`;
+        });
+        timingHtml += '</div>';
+    }
+
+    div.innerHTML = `
+        <div class="debug-panel">
+            <div class="debug-panel-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <span><i class="ph ph-bug"></i> RAG Debug Panel</span>
+                <span class="debug-panel-toggle"><i class="ph ph-caret-down"></i></span>
+            </div>
+            <div class="debug-panel-body">
+                ${metricsHtml}
+                ${waterfallHtml}
+                ${evalHtml}
+                ${chunksHtml}
+                ${errorsHtml}
+                ${timingHtml}
+            </div>
+        </div>`;
+    
+    history.appendChild(div);
+    scrollToBottom();
+}
+
+// ═══════════════════ RAG EVAL DASHBOARD (Settings) ═══════════════════
+async function loadRagEvalDashboard() {
+    const container = document.getElementById('rag-eval-dashboard');
+    if (!container) return;
+
+    try {
+        const res = await fetch(`/api/workspace/${state.workspaceId}/rag/eval`);
+        const data = await res.json();
+        
+        const health = data.index_health || {};
+        const perf = data.search_performance || {};
+        const evalData = data.llm_evaluation || {};
+        const summary = evalData.summary || {};
+        const history = perf.history || [];
+
+        container.innerHTML = `
+            <div class="eval-grid">
+                <div class="eval-card">
+                    <div class="eval-card-title"><i class="ph ph-database"></i> Index Health</div>
+                    <div class="eval-card-stat">${health.indexed_files || 0}</div>
+                    <div class="eval-card-label">Files Indexed</div>
+                    <div class="eval-card-sub">${health.total_chunks || 0} total chunks</div>
+                </div>
+                <div class="eval-card">
+                    <div class="eval-card-title"><i class="ph ph-magnifying-glass"></i> Searches</div>
+                    <div class="eval-card-stat">${perf.total_searches || 0}</div>
+                    <div class="eval-card-label">Total Queries</div>
+                </div>
+                <div class="eval-card">
+                    <div class="eval-card-title"><i class="ph ph-brain"></i> Avg Faithfulness</div>
+                    <div class="eval-card-stat" style="color:${summary.avg_faithfulness >= 0.8 ? '#10b981' : summary.avg_faithfulness >= 0.5 ? '#f59e0b' : '#ef4444'}">${summary.avg_faithfulness !== null && summary.avg_faithfulness !== undefined ? (summary.avg_faithfulness * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="eval-card-label">${summary.total_evals || 0} evaluations</div>
+                </div>
+                <div class="eval-card">
+                    <div class="eval-card-title"><i class="ph ph-target"></i> Avg Relevancy</div>
+                    <div class="eval-card-stat" style="color:${summary.avg_relevancy >= 0.8 ? '#10b981' : summary.avg_relevancy >= 0.5 ? '#f59e0b' : '#ef4444'}">${summary.avg_relevancy !== null && summary.avg_relevancy !== undefined ? (summary.avg_relevancy * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="eval-card-label">Answer Quality</div>
+                </div>
+            </div>
+            ${history.length > 0 ? `
+            <div class="eval-table-wrapper">
+                <div class="eval-table-title">Recent Search History</div>
+                <table class="eval-table">
+                    <thead><tr><th>Query</th><th>Results</th><th>Confidence</th><th>Cosine Sim</th><th>Agreement</th><th>Latency</th></tr></thead>
+                    <tbody>
+                        ${history.slice(-10).reverse().map(h => `<tr>
+                            <td class="eval-query-cell">${escapeHtml((h.query || '').substring(0, 50))}${(h.query || '').length > 50 ? '…' : ''}</td>
+                            <td>${h.results_count || 0}</td>
+                            <td>${h.avg_confidence ? h.avg_confidence.toFixed(4) : '—'}</td>
+                            <td>${h.avg_cosine_sim ? h.avg_cosine_sim.toFixed(4) : '—'}</td>
+                            <td>${h.agreement_rate ? (h.agreement_rate * 100).toFixed(1) + '%' : '—'}</td>
+                            <td>${h.latency_ms ? h.latency_ms.toFixed(0) + 'ms' : '—'}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>` : '<div class="eval-empty">No searches yet. Try asking the agent a question about your documents.</div>'}
+        `;
+    } catch(e) {
+        container.innerHTML = `<div class="eval-empty">Failed to load RAG evaluation data: ${e.message}</div>`;
+    }
 }

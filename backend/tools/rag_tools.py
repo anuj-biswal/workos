@@ -1,13 +1,24 @@
 """
 RAG search tool for the LangGraph agent.
 Provides semantic + keyword hybrid search across all indexed workspace documents.
+Stores diagnostics from the last search for the debug panel / eval dashboard.
 """
 
 import os
+import time
+import logging
 from langchain_core.tools import tool
+
+logger = logging.getLogger(__name__)
 
 # Lazy import of the RAG engine singleton — initialized in main.py
 _rag_engine = None
+# Rolling search history (last 20 queries) for eval dashboard
+_search_history: list[dict] = []
+# Last search diagnostics for debug panel
+_last_diagnostics: dict | None = None
+# Last retrieved chunks (for LLM-as-judge evaluation)
+_last_context_chunks: list[dict] = []
 
 def set_rag_engine(engine):
     """Called from main.py to inject the RAG engine singleton."""
@@ -15,8 +26,19 @@ def set_rag_engine(engine):
     _rag_engine = engine
 
 def get_rag_engine():
-    global _rag_engine
     return _rag_engine
+
+def get_last_diagnostics() -> dict | None:
+    """Return diagnostics from the most recent search_documents call."""
+    return _last_diagnostics
+
+def get_last_context_chunks() -> list[dict]:
+    """Return the retrieved context chunks from the most recent search."""
+    return _last_context_chunks
+
+def get_search_history() -> list[dict]:
+    """Return rolling search history (last 20)."""
+    return list(_search_history)
 
 @tool
 def search_documents(query: str, workspace_id: str = "default-workspace") -> str:
@@ -36,11 +58,41 @@ def search_documents(query: str, workspace_id: str = "default-workspace") -> str
     Returns:
         Relevant passages with source citations, or a message if nothing was found.
     """
+    global _last_diagnostics, _last_context_chunks, _search_history
+
     engine = get_rag_engine()
     if engine is None:
+        _last_diagnostics = {"error": "RAG engine not initialized"}
         return "Error: RAG engine not initialized. Please try again later."
 
-    results = engine.search(workspace_id, query, top_k=8)
+    try:
+        search_result = engine.search(workspace_id, query, top_k=8)
+    except Exception as e:
+        logger.error(f"search_documents error: {e}")
+        _last_diagnostics = {"error": str(e), "query": query}
+        return f"Error during search: {str(e)}. Try using read_pdf_file or read_text_file instead."
+
+    results = search_result.get("results", [])
+    diagnostics = search_result.get("diagnostics", {})
+
+    # Store diagnostics for the debug panel
+    _last_diagnostics = diagnostics
+    _last_context_chunks = results  # store for LLM-as-judge
+
+    # Add to search history (rolling window of 20)
+    _search_history.append({
+        "query": query,
+        "workspace_id": workspace_id,
+        "results_count": len(results),
+        "avg_confidence": diagnostics.get("avg_rrf_score"),
+        "avg_cosine_sim": diagnostics.get("avg_cosine_similarity"),
+        "agreement_rate": diagnostics.get("agreement_rate"),
+        "latency_ms": diagnostics.get("latency_ms", {}).get("total", 0),
+        "source_diversity": diagnostics.get("source_diversity", 0),
+        "timestamp": time.time(),
+    })
+    if len(_search_history) > 20:
+        _search_history.pop(0)
 
     if not results:
         return (

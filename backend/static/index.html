@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgentOS — Agentic AI Workspace</title>
     <meta name="description" content="Enterprise AI-powered document analysis, data transformation, and visualization platform">
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=4">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -496,6 +496,16 @@
                             </div>
                         </div>
                     </section>
+
+                    <!-- RAG Evaluation Dashboard -->
+                    <section class="panel settings-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-chart-line-up"></i> RAG Evaluation Dashboard</h3>
+                        </div>
+                        <div id="rag-eval-dashboard" class="rag-eval-dashboard">
+                            <div class="eval-empty">Loading evaluation data...</div>
+                        </div>
+                    </section>
                 </div>
             </div>
 
@@ -548,6 +558,6 @@
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 </body>
 </html>

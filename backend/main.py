@@ -34,13 +34,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from rag.rag_engine import RAGEngine
-from tools.rag_tools import set_rag_engine
+from rag.evaluator import RAGEvaluator
+from tools.rag_tools import set_rag_engine, get_last_diagnostics, get_last_context_chunks, get_search_history
 import logging
 
 VECTORSTORE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vectorstore")
 rag_engine = RAGEngine(persist_dir=VECTORSTORE_DIR)
 set_rag_engine(rag_engine)
-logging.info("RAG engine initialized")
+rag_evaluator = RAGEvaluator(model="gpt-4.1-mini")
+logging.info("RAG engine + evaluator initialized")
 
 # ── Rate limiter (in-memory sliding window) ──────────────────────────────────
 _rate_buckets: dict[str, list[float]] = {}
@@ -215,7 +217,31 @@ async def execute_plan(req: PlanApproval):
         )
         log_activity("execution", f"Executed {len(req.plan_steps)} steps", {"results_count": len(results)})
         
-        return {
+        # Build debug data if RAG search was used
+        debug_data = None
+        rag_diagnostics = get_last_diagnostics()
+        if rag_diagnostics and rag_diagnostics.get("query"):
+            debug_data = {
+                "rag_diagnostics": rag_diagnostics,
+                "per_step_timing": [{"step_id": r.get("step_id"), "tool": r.get("tool"), "duration_ms": r.get("duration_ms", 0)} for r in results],
+                "errors_encountered": [{"step_id": r.get("step_id"), "tool": r.get("tool"), "error_type": r.get("error_type"), "retries": r.get("retries", 0)} for r in results if r.get("status") == "error"],
+            }
+            
+            # Run LLM-as-judge evaluation if we have context and a reply
+            context_chunks = get_last_context_chunks()
+            if reply and context_chunks:
+                try:
+                    eval_result = rag_evaluator.evaluate(
+                        question=rag_diagnostics.get("query", ""),
+                        answer=reply,
+                        context_chunks=context_chunks,
+                    )
+                    debug_data["llm_evaluation"] = eval_result
+                except Exception as eval_err:
+                    logging.warning(f"LLM evaluation failed: {eval_err}")
+                    debug_data["llm_evaluation"] = {"error": str(eval_err)}
+        
+        response = {
             "status": "completed",
             "results": results,
             "reply": reply,
@@ -225,6 +251,10 @@ async def execute_plan(req: PlanApproval):
                 "remaining": max(0, token_usage["limit"] - token_usage["total_tokens"]),
             }
         }
+        if debug_data:
+            response["debug"] = debug_data
+        
+        return response
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Execution timed out after 120 seconds.")
     except Exception as e:
@@ -431,6 +461,33 @@ async def rag_reindex(workspace_id: str):
     total_chunks = sum(r["chunks_created"] for r in results)
     log_activity("rag_reindex", f"Re-indexed {len(results)} files ({total_chunks} chunks)")
     return {"files_indexed": len(results), "total_chunks": total_chunks, "details": results}
+
+@app.get("/api/workspace/{workspace_id}/rag/eval")
+async def rag_eval(workspace_id: str):
+    """Get RAG evaluation metrics: index health, search history, LLM judge scores."""
+    indexed_files = rag_engine.get_indexed_files(workspace_id)
+    total_chunks = rag_engine.get_total_chunks(workspace_id)
+    search_history = get_search_history()
+    eval_summary = rag_evaluator.get_summary()
+    eval_history = rag_evaluator.get_history()
+    last_diagnostics = get_last_diagnostics()
+    
+    return {
+        "index_health": {
+            "indexed_files": len(indexed_files),
+            "total_chunks": total_chunks,
+            "files": indexed_files,
+        },
+        "search_performance": {
+            "total_searches": len(search_history),
+            "history": search_history[-10:],  # last 10
+            "last_diagnostics": last_diagnostics,
+        },
+        "llm_evaluation": {
+            "summary": eval_summary,
+            "history": eval_history[-10:],  # last 10
+        },
+    }
 
 # ── Mount static frontend ────────────────────────────────────────────────────
 os.makedirs("static", exist_ok=True)
