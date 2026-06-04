@@ -29,6 +29,19 @@ app.add_middleware(
 BASE_WORKSPACE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workspaces")
 os.makedirs(BASE_WORKSPACE_DIR, exist_ok=True)
 
+# ── RAG Engine initialization ────────────────────────────────────────────────
+from dotenv import load_dotenv
+load_dotenv()
+
+from rag.rag_engine import RAGEngine
+from tools.rag_tools import set_rag_engine
+import logging
+
+VECTORSTORE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vectorstore")
+rag_engine = RAGEngine(persist_dir=VECTORSTORE_DIR)
+set_rag_engine(rag_engine)
+logging.info("RAG engine initialized")
+
 # ── Rate limiter (in-memory sliding window) ──────────────────────────────────
 _rate_buckets: dict[str, list[float]] = {}
 RATE_LIMIT = 30   # max requests per minute
@@ -90,6 +103,17 @@ async def upload_file(file: UploadFile = File(...), workspace_id: Optional[str] 
     
     from agent import log_activity
     log_activity("file_upload", f"Uploaded {file.filename}", {"size": file_size})
+    
+    # Auto-index the file for RAG search (run in background thread)
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(
+            _EXECUTOR,
+            lambda: rag_engine.ingest_file(workspace_id, file.filename, file_path)
+        )
+        log_activity("rag_index", f"Indexing {file.filename} for semantic search")
+    except Exception as e:
+        logging.warning(f"RAG indexing failed for {file.filename}: {e}")
     
     return {"workspace_id": workspace_id, "filename": file.filename, "status": "uploaded", "size": file_size}
 
@@ -378,9 +402,39 @@ async def delete_task(task_id: int):
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Task not found")
 
+# ── RAG endpoints ─────────────────────────────────────────────────────────────
+@app.get("/api/workspace/{workspace_id}/rag/status")
+async def rag_status(workspace_id: str):
+    """Get RAG indexing status for a workspace."""
+    indexed_files = rag_engine.get_indexed_files(workspace_id)
+    total_chunks = rag_engine.get_total_chunks(workspace_id)
+    return {
+        "workspace_id": workspace_id,
+        "indexed_files": indexed_files,
+        "total_chunks": total_chunks,
+    }
+
+@app.post("/api/workspace/{workspace_id}/rag/reindex")
+async def rag_reindex(workspace_id: str):
+    """Re-index all files in a workspace."""
+    workspace_path = os.path.join(BASE_WORKSPACE_DIR, workspace_id)
+    if not os.path.exists(workspace_path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    results = []
+    for fname in os.listdir(workspace_path):
+        fpath = os.path.join(workspace_path, fname)
+        if os.path.isfile(fpath):
+            result = rag_engine.ingest_file(workspace_id, fname, fpath)
+            results.append(result)
+    
+    total_chunks = sum(r["chunks_created"] for r in results)
+    log_activity("rag_reindex", f"Re-indexed {len(results)} files ({total_chunks} chunks)")
+    return {"files_indexed": len(results), "total_chunks": total_chunks, "details": results}
+
 # ── Mount static frontend ────────────────────────────────────────────────────
 os.makedirs("static", exist_ok=True)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, reload_excludes=["workspaces/*", "scratch/*", "*.png", "*.csv", "*.txt", "*.xlsx", "*.pdf"])
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, reload_excludes=["workspaces/*", "vectorstore/*", "scratch/*", "*.png", "*.csv", "*.txt", "*.xlsx", "*.pdf"])

@@ -28,6 +28,7 @@ venv/
 # Application specific
 backend/workspaces/
 backend/scratch/
+backend/vectorstore/
 backend/workspaces/*/
 !backend/workspaces/.keep
 backend/scratch/*/

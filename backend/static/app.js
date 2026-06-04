@@ -639,6 +639,7 @@ function scrollToBottom() {
 
 function _getToolCategory(toolName) {
     if (toolName === '__synthesize__') return { label: 'Synthesize & Respond', icon: 'ph-brain', cls: 'synthesize' };
+    if (toolName === 'search_documents') return { label: 'RAG Search', icon: 'ph-magnifying-glass', cls: 'rag' };
     if (toolName.includes('chart') || toolName.includes('histogram') || toolName.includes('visualize')) return { label: 'Chart', icon: 'ph-chart-bar', cls: 'chart' };
     if (toolName.includes('analyze_dataset') || toolName.includes('clean') || toolName.includes('transform')) return { label: 'Data', icon: 'ph-database', cls: 'data' };
     if (toolName.includes('image') || toolName.includes('vision')) return { label: 'Vision', icon: 'ph-eye', cls: 'vision' };

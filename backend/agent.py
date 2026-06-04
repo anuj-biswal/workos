@@ -24,6 +24,7 @@ from tools.chart_tools import (
     generate_bar_chart, generate_line_chart, generate_pie_chart, generate_histogram
 )
 from tools.vision_tools import analyze_image
+from tools.rag_tools import search_documents
 
 load_dotenv()
 
@@ -75,6 +76,7 @@ def log_activity(action: str, detail: str = "", meta: dict | None = None):
 
 # ── Tools list (NO delete_file — users cannot delete from agent) ─────────────
 ALL_TOOLS = [
+    search_documents,
     create_text_file, read_text_file, modify_text_file,
     create_excel_file, read_excel_file, modify_excel_file,
     create_pdf_file, read_pdf_file, read_pdf_advanced, modify_pdf_file,
@@ -99,6 +101,7 @@ class AgentState(TypedDict):
 SYSTEM_PROMPT = """You are AgentOS, an expert Data Scientist and AI Assistant built for enterprise document analysis, data transformation, and visualization.
 
 You have access to tools for:
+• **RAG Search** — `search_documents`: AI-powered semantic + keyword hybrid search across all uploaded documents
 • File operations — create, read, modify text/CSV/Excel/PDF files
 • Dataset operations — analyze, clean, transform datasets
 • Charting — bar charts, line charts, pie charts, histograms
@@ -110,9 +113,16 @@ METHODOLOGY (ReAct — Reason + Act):
 
 STEP DESCRIPTIONS (CRITICAL):
 When you decide to use tools, your reply text MUST contain a brief, human-readable summary of your plan. Write it like you are explaining to a colleague what you are about to do, NOT like a system log. For example:
-- GOOD: "I'll read your sales data, identify the key revenue columns, and create a bar chart comparing revenue by product."
-- BAD: "Execute read_csv_file, then execute generate_bar_chart."
+- GOOD: "I'll search your financial reports for revenue data, extract the key figures, and create a comparison bar chart."
+- BAD: "Execute search_documents, then execute generate_bar_chart."
 Be conversational, clear, and explain the WHY behind each step.
+
+RAG SEARCH (CRITICAL — USE THIS FIRST):
+- When the user asks questions about document content (summaries, comparisons, specific data, analysis), ALWAYS use `search_documents` FIRST instead of reading entire files.
+- `search_documents` uses AI-powered hybrid search (semantic + keyword) to find the most relevant passages across ALL uploaded documents. It returns excerpts with source citations (filename + page number).
+- Only use `read_pdf_file`, `read_text_file`, etc. when: (a) the user explicitly asks to see the FULL content of a file, (b) search_documents returns no results and you need to fall back, or (c) you need the complete file for data operations like charting.
+- When presenting results from search_documents, ALWAYS cite the source: mention the filename and page number.
+- For comparisons across multiple documents, call search_documents with targeted queries (e.g., "revenue Q4 2025" rather than vague queries like "compare").
 
 CRITICAL RULES:
 - If the user asks for a summary or explanation of a chart/image, use the `analyze_image` tool.
@@ -162,6 +172,7 @@ def _humanize_tool_call(tool_name: str, args: dict) -> str:
         "generate_pie_chart": f"Generate a pie chart from '{filename}'",
         "generate_histogram": f"Generate a histogram from '{filename}'",
         "analyze_image": f"Analyze and interpret the image '{filename}'",
+        "search_documents": f"Search documents for: '{args.get('query', '')}'",
     }
     return labels.get(tool_name, f"Process '{filename}' using {tool_name.replace('_', ' ')}")
 
