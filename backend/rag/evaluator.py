@@ -23,7 +23,7 @@ Faithfulness = the degree to which EVERY claim in the ANSWER is supported by the
 - 0.5 = some claims are supported, some are not
 - 0.0 = the answer is entirely fabricated / not grounded in context
 
-Respond with ONLY a JSON object: {"score": <float 0-1>, "reasoning": "<1-2 sentence explanation>"}
+Respond with ONLY a JSON object: {{"score": <float 0-1>, "reasoning": "<1-2 sentence explanation>"}}
 
 QUESTION: {question}
 
@@ -39,7 +39,7 @@ Relevancy = the degree to which the ANSWER directly addresses what the user aske
 - 0.5 = the answer partially addresses the question or includes irrelevant info
 - 0.0 = the answer does not address the question at all
 
-Respond with ONLY a JSON object: {"score": <float 0-1>, "reasoning": "<1-2 sentence explanation>"}
+Respond with ONLY a JSON object: {{"score": <float 0-1>, "reasoning": "<1-2 sentence explanation>"}}
 
 QUESTION: {question}
 
@@ -52,7 +52,7 @@ Context Precision = the proportion of retrieved chunks that are relevant.
 - 0.5 = about half of the chunks are relevant
 - 0.0 = none of the chunks are relevant
 
-Respond with ONLY a JSON object: {"score": <float 0-1>, "reasoning": "<1-2 sentence explanation>", "relevant_chunks": [<list of 1-indexed positions that are relevant>]}
+Respond with ONLY a JSON object: {{"score": <float 0-1>, "reasoning": "<1-2 sentence explanation>", "relevant_chunks": [<list of 1-indexed positions that are relevant>]}}
 
 QUESTION: {question}
 
