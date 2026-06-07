@@ -24,7 +24,7 @@ from tools.chart_tools import (
     generate_bar_chart, generate_line_chart, generate_pie_chart, generate_histogram
 )
 from tools.vision_tools import analyze_image
-from tools.rag_tools import search_documents
+from tools.rag_tools import search_documents, edit_chunk, ingest_folder
 
 load_dotenv()
 
@@ -83,7 +83,7 @@ ALL_TOOLS = [
     create_csv_file, read_csv_file, modify_csv_file,
     analyze_dataset, clean_dataset, transform_dataset, visualize_dataset,
     generate_bar_chart, generate_line_chart, generate_pie_chart, generate_histogram,
-    analyze_image
+    analyze_image, edit_chunk, ingest_folder
 ]
 
 TOOL_MAP = {tool.name: tool for tool in ALL_TOOLS}

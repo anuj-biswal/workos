@@ -239,8 +239,38 @@
                             <h3>Drop files here or click to upload</h3>
                             <p>Supports: Excel, CSV, PDF, Text, Images</p>
                             <button class="btn-accent" id="upload-zone-btn">Browse Files</button>
+                            <button class="btn-accent outline" id="upload-folder-btn" style="margin-left: 10px; background: transparent; border: 1px solid var(--accent); color: var(--accent);">Upload Folder</button>
                             <input type="file" id="upload-zone-input" style="display:none;" multiple accept=".xlsx,.xls,.csv,.pdf,.txt,.doc,.docx,.png,.jpg,.jpeg">
+                            <input type="file" id="upload-folder-input" style="display:none;" webkitdirectory directory multiple>
+                            <div id="upload-progress-container" style="display:none; margin-top:15px; width:100%;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                                    <span id="upload-progress-text">Uploading...</span>
+                                </div>
+                                <div class="token-mini-bar">
+                                    <div class="token-mini-fill" id="upload-progress-bar" style="width:0%"></div>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- RAG Document Management Panel (hidden by default) -->
+                    <div id="rag-doc-management" style="display:none; margin-bottom: 20px;">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-database"></i> RAG Document Index</h3>
+                            <button class="btn-accent btn-sm" id="rag-reindex-all-btn"><i class="ph ph-arrows-clockwise"></i> Re-index All</button>
+                        </div>
+                        <table class="data-table" style="width:100%; text-align:left; border-collapse:collapse; margin-top:10px;">
+                            <thead>
+                                <tr style="border-bottom:1px solid rgba(0,0,0,0.1);">
+                                    <th style="padding:10px;">Filename</th>
+                                    <th style="padding:10px;">Chunks</th>
+                                    <th style="padding:10px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rag-doc-list">
+                                <tr><td colspan="3" style="padding:10px; opacity:0.5;">Loading...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
 
                     <!-- File filter tabs -->
@@ -251,6 +281,7 @@
                         <button class="tab" data-file-filter="pdf">PDF</button>
                         <button class="tab" data-file-filter="text">Text</button>
                         <button class="tab" data-file-filter="image">Images</button>
+                        <button class="tab" data-file-filter="rag_index" id="tab-rag-index">RAG Index</button>
                         <div class="tab-spacer"></div>
                         <button class="icon-btn" id="file-view-grid" title="Grid View"><i class="ph ph-squares-four"></i></button>
                         <button class="icon-btn" id="file-view-list" title="List View"><i class="ph ph-list"></i></button>
@@ -506,6 +537,36 @@
                             <div class="eval-empty">Loading evaluation data...</div>
                         </div>
                     </section>
+
+                    <!-- RAG Search Settings -->
+                    <section class="panel settings-panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-magnifying-glass"></i> RAG Search Settings</h3>
+                        </div>
+                        <div style="padding: 15px;">
+                            <div class="input-group" style="margin-bottom: 15px;">
+                                <label style="display:flex; justify-content:space-between;">
+                                    <span>Hybrid Search Alpha (Vector vs Keyword)</span>
+                                    <span id="alpha-value-display">0.7</span>
+                                </label>
+                                <input type="range" id="rag-alpha-slider" min="0" max="1" step="0.1" value="0.7" style="width:100%;">
+                                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.6; margin-top:5px;">
+                                    <span>Keyword Only (0.0)</span>
+                                    <span>Vector Only (1.0)</span>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:20px; margin-bottom:15px;">
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                    <input type="checkbox" id="rag-use-reranker" checked> Enable Cross-Encoder Re-ranking
+                                </label>
+                            </div>
+                            <div style="display:flex; gap:20px;">
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                    <input type="checkbox" id="rag-expand-query" checked> Enable LLM Query Expansion
+                                </label>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
 
@@ -558,6 +619,42 @@
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="app.js?v=4"></script>
+    <!-- Chunk Viewer/Editor Modal -->
+    <div id="chunk-modal" class="modal-overlay">
+        <div class="modal-card" style="width: 800px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-card-header">
+                <h3 id="chunk-modal-title">Document Chunks</h3>
+                <button class="icon-btn" id="close-chunk-modal"><i class="ph ph-x"></i></button>
+            </div>
+            <div style="padding: 10px 20px; border-bottom: 1px solid rgba(0,0,0,0.1); display: flex; justify-content: space-between;">
+                <span id="chunk-count-display">0 chunks</span>
+            </div>
+            <div id="chunk-list-container" style="padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 15px;">
+                <!-- Chunks injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF Page Viewer Modal -->
+    <div id="pdf-page-modal" class="modal-overlay">
+        <div class="modal-card" style="width: 800px; max-width: 95vw; background: #e5e5e5; display: flex; flex-direction: column; height: 90vh;">
+            <div class="modal-card-header" style="background: white;">
+                <h3 id="pdf-page-modal-title">PDF Citation Page</h3>
+                <div>
+                    <button class="icon-btn" id="pdf-zoom-in"><i class="ph ph-magnifying-glass-plus"></i></button>
+                    <button class="icon-btn" id="pdf-zoom-out"><i class="ph ph-magnifying-glass-minus"></i></button>
+                    <button class="icon-btn" id="close-pdf-page-modal"><i class="ph ph-x"></i></button>
+                </div>
+            </div>
+            <div style="flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 20px;">
+                <img id="pdf-page-img" style="max-width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.2s;" src="" alt="PDF Page">
+                <div id="pdf-page-loading" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
+                    <i class="ph ph-spinner ph-spin" style="font-size:3rem; color:var(--accent);"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=5"></script>
 </body>
 </html>

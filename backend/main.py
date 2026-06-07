@@ -88,6 +88,15 @@ class PlanApproval(BaseModel):
 class TokenLimitUpdate(BaseModel):
     limit: int
 
+class ChunkUpdate(BaseModel):
+    text: str
+
+class RAGQueryRequest(BaseModel):
+    query: str
+    workspace_id: str = "default-workspace"
+    expand_query: bool = True
+    use_reranker: bool = True
+
 # ── File upload ───────────────────────────────────────────────────────────────
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), workspace_id: Optional[str] = Form(None)):
@@ -433,6 +442,71 @@ async def delete_task(task_id: int):
     raise HTTPException(status_code=404, detail="Task not found")
 
 # ── RAG endpoints ─────────────────────────────────────────────────────────────
+@app.get("/api/workspace/{workspace_id}/rag/chunks")
+async def rag_get_chunks(workspace_id: str, document: Optional[str] = None, page: int = 1, per_page: int = 50):
+    return rag_engine.get_chunks(workspace_id, document, page, per_page)
+
+@app.get("/api/workspace/{workspace_id}/rag/chunks/{chunk_id}")
+async def rag_get_chunk(workspace_id: str, chunk_id: str):
+    chunk = rag_engine.get_chunk(workspace_id, chunk_id)
+    if not chunk:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+    return chunk
+
+@app.put("/api/workspace/{workspace_id}/rag/chunks/{chunk_id}")
+async def rag_update_chunk(workspace_id: str, chunk_id: str, update: ChunkUpdate):
+    success = rag_engine.update_chunk(workspace_id, chunk_id, update.text)
+    if not success:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+    return {"status": "updated"}
+
+@app.delete("/api/workspace/{workspace_id}/rag/chunks/{chunk_id}")
+async def rag_delete_chunk(workspace_id: str, chunk_id: str):
+    success = rag_engine.delete_chunk(workspace_id, chunk_id)
+    return {"status": "deleted"}
+
+@app.get("/api/workspace/{workspace_id}/rag/pdf-page/{filename}/{page_number}")
+async def rag_pdf_page(workspace_id: str, filename: str, page_number: int):
+    from fastapi.responses import Response
+    file_path = os.path.join(BASE_WORKSPACE_DIR, workspace_id, filename)
+    img_bytes = rag_engine.render_pdf_page(file_path, page_number)
+    if not img_bytes:
+        raise HTTPException(status_code=404, detail="Page not found or rendering failed")
+    return Response(content=img_bytes, media_type="image/png")
+
+@app.post("/api/upload-folder")
+async def upload_folder(request: Request, workspace_id: Optional[str] = Form("default-workspace")):
+    form = await request.form()
+    files = form.getlist("files")
+    workspace_path = os.path.join(BASE_WORKSPACE_DIR, workspace_id)
+    os.makedirs(workspace_path, exist_ok=True)
+    
+    results = []
+    for file in files:
+        if isinstance(file, UploadFile):
+            file_path = os.path.join(workspace_path, file.filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            try:
+                loop = asyncio.get_event_loop()
+                loop.run_in_executor(
+                    _EXECUTOR,
+                    lambda f=file.filename, p=file_path: rag_engine.ingest_file(workspace_id, f, p)
+                )
+                results.append({"filename": file.filename, "status": "uploaded_and_indexing"})
+            except Exception as e:
+                results.append({"filename": file.filename, "status": f"error: {str(e)}"})
+                
+    return {"workspace_id": workspace_id, "files": results}
+
+@app.post("/api/rag/query")
+async def rag_query(req: RAGQueryRequest):
+    return rag_engine.search(req.workspace_id, req.query, top_k=8, expand_query=req.expand_query, use_reranker=req.use_reranker)
+
+@app.post("/api/workspace/{workspace_id}/rag/re-embed-all")
+async def rag_reembed_all(workspace_id: str):
+    return rag_engine.re_embed_all(workspace_id)
+
 @app.get("/api/workspace/{workspace_id}/rag/status")
 async def rag_status(workspace_id: str):
     """Get RAG indexing status for a workspace."""

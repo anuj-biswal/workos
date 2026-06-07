@@ -115,3 +115,46 @@ def search_documents(query: str, workspace_id: str = "default-workspace") -> str
         )
 
     return "\n".join(output_parts)
+
+@tool
+def edit_chunk(chunk_id: str, new_text: str, workspace_id: str = "default-workspace") -> str:
+    """Edit the text of a specific RAG chunk.
+    
+    This is useful for correcting OCR errors, fixing table parsing, or adding missing context
+    to a chunk. The chunk will be re-embedded automatically.
+    
+    Args:
+        chunk_id: The ID of the chunk to edit.
+        new_text: The corrected text for the chunk.
+        workspace_id: The workspace identifier.
+        
+    Returns:
+        A success or error message.
+    """
+    engine = get_rag_engine()
+    if engine is None:
+        return "Error: RAG engine not initialized."
+        
+    success = engine.update_chunk(workspace_id, chunk_id, new_text)
+    if success:
+        return f"Successfully updated chunk {chunk_id}."
+    else:
+        return f"Error: Chunk {chunk_id} not found."
+
+@tool
+def ingest_folder(folder_path: str, workspace_id: str = "default-workspace") -> str:
+    """Ingest a folder of documents into the RAG system.
+    
+    Args:
+        folder_path: The absolute path to the folder containing documents.
+        workspace_id: The workspace identifier.
+        
+    Returns:
+        A summary of the ingestion process.
+    """
+    engine = get_rag_engine()
+    if engine is None:
+        return "Error: RAG engine not initialized."
+        
+    result = engine.ingest_folder(workspace_id, folder_path)
+    return f"Processed {result['files_processed']} files, created {result['total_chunks']} chunks."

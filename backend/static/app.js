@@ -585,6 +585,16 @@ function appendUserMessage(text) {
 }
 
 function renderMarkdown(text) {
+    // Replace citations like [Source: filename.pdf, page 5] or [Source: filename.pdf] with clickable badges
+    const citationRegex = /\[Source:\s*([^,\]]+)(?:,\s*page\s*(\d+))?\]/gi;
+    text = text.replace(citationRegex, (match, filename, page) => {
+        if (page) {
+            return `<span class="citation-badge" onclick="openPdfCitation('${filename}', ${page})"><i class="ph ph-file-pdf"></i> ${filename} (p.${page})</span>`;
+        } else {
+            return `<span class="citation-badge" onclick="navigateTo('files'); setTimeout(() => openFilePreview('${filename}'), 150)"><i class="ph ph-file"></i> ${filename}</span>`;
+        }
+    });
+
     // Use marked.js to parse markdown into HTML
     if (typeof marked !== 'undefined') {
         try {
@@ -1459,3 +1469,318 @@ async function loadRagEvalDashboard() {
         container.innerHTML = `<div class="eval-empty">Failed to load RAG evaluation data: ${e.message}</div>`;
     }
 }
+
+// =====================================================================
+// RAG FRONTEND EXTENSIONS
+// =====================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Folder Upload Setup
+    const folderUploadBtn = document.getElementById('upload-folder-btn');
+    const folderUploadInput = document.getElementById('upload-folder-input');
+    if (folderUploadBtn && folderUploadInput) {
+        folderUploadBtn.addEventListener('click', () => folderUploadInput.click());
+        folderUploadInput.addEventListener('change', handleFolderUpload);
+    }
+
+    // Modal Closes
+    document.getElementById('close-pdf-page-modal').addEventListener('click', () => {
+        document.getElementById('pdf-page-modal').classList.remove('show');
+    });
+    document.getElementById('close-chunk-modal').addEventListener('click', () => {
+        document.getElementById('chunk-modal').classList.remove('show');
+    });
+
+    // Zoom PDF
+    document.getElementById('pdf-zoom-in').addEventListener('click', () => zoomPdf(1.2));
+    document.getElementById('pdf-zoom-out').addEventListener('click', () => zoomPdf(0.8));
+
+    // Settings Sync
+    document.getElementById('rag-alpha-slider')?.addEventListener('input', (e) => {
+        document.getElementById('alpha-value-display').textContent = e.target.value;
+    });
+
+    // Tab for RAG Index
+    const ragIndexTab = document.getElementById('tab-rag-index');
+    if (ragIndexTab) {
+        ragIndexTab.addEventListener('click', () => {
+            document.getElementById('file-grid').style.display = 'none';
+            document.getElementById('rag-doc-management').style.display = 'block';
+            loadRagIndex();
+        });
+    }
+
+    // Tabs logic override for RAG Index
+    document.querySelectorAll('.file-tabs .tab[data-file-filter]').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            if (e.target.dataset.fileFilter !== 'rag_index') {
+                document.getElementById('rag-doc-management').style.display = 'none';
+                document.getElementById('file-grid').style.display = 'grid';
+            }
+        });
+    });
+
+    // Re-index All
+    document.getElementById('rag-reindex-all-btn')?.addEventListener('click', async () => {
+        showToast('Re-indexing all files...', 'info');
+        try {
+            const res = await fetch(`/api/workspace/${state.workspaceId}/rag/re-embed-all`, { method: 'POST' });
+            if (res.ok) {
+                showToast('Re-indexing triggered successfully', 'success');
+                setTimeout(loadRagIndex, 1000);
+            } else {
+                showToast('Failed to trigger re-indexing', 'error');
+            }
+        } catch (e) {
+            showToast('Error triggering re-indexing', 'error');
+        }
+    });
+});
+
+async function handleFolderUpload(e) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const progressContainer = document.getElementById('upload-progress-container');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressText = document.getElementById('upload-progress-text');
+    
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = `Uploading folder... (0/${files.length})`;
+
+    const formData = new FormData();
+    formData.append("workspace_id", state.workspaceId);
+    for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+    }
+
+    try {
+        // Mock progress for UI
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 5;
+            if (progress > 90) clearInterval(interval);
+            progressBar.style.width = `${progress}%`;
+        }, 500);
+
+        const res = await fetch('/api/upload-folder', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        
+        clearInterval(interval);
+        progressBar.style.width = '100%';
+        progressText.textContent = `Upload complete. Processing files...`;
+        
+        if (res.ok) {
+            showToast(`Uploaded ${files.length} files from folder`, 'success');
+            appendSystemMessage(`Folder uploaded with ${files.length} files. Indexing in background...`);
+        } else {
+            showToast(`Failed to upload folder: ${data.detail}`, 'error');
+        }
+        
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 3000);
+        
+    } catch (err) {
+        console.error(err);
+        showToast(`Upload folder error`, 'error');
+        progressContainer.style.display = 'none';
+    }
+    
+    e.target.value = ''; // Reset input
+    fetchAllData(); // Refresh UI
+}
+
+// ── Citation PDF Viewer ───────────────────────────────────────────────
+let currentPdfZoom = 1;
+window.openPdfCitation = function(filename, pageNumber) {
+    const modal = document.getElementById('pdf-page-modal');
+    const img = document.getElementById('pdf-page-img');
+    const loading = document.getElementById('pdf-page-loading');
+    const title = document.getElementById('pdf-page-modal-title');
+    
+    title.textContent = `${filename} - Page ${pageNumber}`;
+    img.style.display = 'none';
+    loading.style.display = 'block';
+    modal.classList.add('show');
+    
+    // Reset zoom
+    currentPdfZoom = 1;
+    img.style.transform = `scale(${currentPdfZoom})`;
+    
+    const imgUrl = `/api/workspace/${state.workspaceId}/rag/pdf-page/${encodeURIComponent(filename)}/${pageNumber}`;
+    
+    // Preload image
+    const tempImg = new Image();
+    tempImg.onload = () => {
+        img.src = imgUrl;
+        loading.style.display = 'none';
+        img.style.display = 'block';
+    };
+    tempImg.onerror = () => {
+        loading.style.display = 'none';
+        showToast('Could not load PDF page image.', 'error');
+        modal.classList.remove('show');
+    };
+    tempImg.src = imgUrl;
+};
+
+function zoomPdf(factor) {
+    currentPdfZoom *= factor;
+    currentPdfZoom = Math.max(0.5, Math.min(currentPdfZoom, 3));
+    document.getElementById('pdf-page-img').style.transform = `scale(${currentPdfZoom})`;
+}
+
+// ── RAG Document Index Management ──────────────────────────────────────
+async function loadRagIndex() {
+    const tbody = document.getElementById('rag-doc-list');
+    tbody.innerHTML = '<tr><td colspan="3" style="padding:10px; text-align:center;">Loading index...</td></tr>';
+    
+    try {
+        const res = await fetch(`/api/workspace/${state.workspaceId}/rag/chunks?per_page=1000`);
+        if (!res.ok) throw new Error('Failed to fetch chunks');
+        const data = await res.json();
+        const chunks = data.chunks || [];
+        
+        // Group by filename
+        const docs = {};
+        chunks.forEach(c => {
+            const fname = c.metadata.filename || 'Unknown';
+            if (!docs[fname]) docs[fname] = [];
+            docs[fname].push(c);
+        });
+        
+        tbody.innerHTML = '';
+        if (Object.keys(docs).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="padding:10px; text-align:center; opacity:0.5;">No indexed documents found.</td></tr>';
+            return;
+        }
+        
+        for (const [filename, docChunks] of Object.entries(docs)) {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(0,0,0,0.05)';
+            tr.innerHTML = `
+                <td style="padding:10px; font-weight:500;">
+                    <i class="ph ph-file-text" style="color:var(--accent); margin-right:5px;"></i>
+                    ${escapeHtml(filename)}
+                </td>
+                <td style="padding:10px;">${docChunks.length} chunks</td>
+                <td style="padding:10px;">
+                    <button class="btn-accent btn-sm" onclick="viewDocumentChunks('${escapeHtml(filename)}')">View/Edit Chunks</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="3" style="padding:10px; color:var(--danger);">Error loading index data.</td></tr>';
+    }
+}
+
+window.viewDocumentChunks = async function(filename) {
+    const modal = document.getElementById('chunk-modal');
+    const container = document.getElementById('chunk-list-container');
+    const title = document.getElementById('chunk-modal-title');
+    const countDisplay = document.getElementById('chunk-count-display');
+    
+    title.textContent = `Chunks for: ${filename}`;
+    container.innerHTML = '<div style="text-align:center; padding: 2rem;"><i class="ph ph-spinner ph-spin" style="font-size: 2rem; color:var(--accent);"></i></div>';
+    countDisplay.textContent = 'Loading...';
+    modal.classList.add('show');
+    
+    try {
+        const res = await fetch(`/api/workspace/${state.workspaceId}/rag/chunks?document=${encodeURIComponent(filename)}&per_page=100`);
+        if (!res.ok) throw new Error('Failed to fetch chunks');
+        const data = await res.json();
+        const chunks = data.chunks || [];
+        
+        countDisplay.textContent = `${chunks.length} chunks`;
+        container.innerHTML = '';
+        
+        if (chunks.length === 0) {
+            container.innerHTML = '<div style="text-align:center; opacity:0.5; padding: 2rem;">No chunks found.</div>';
+            return;
+        }
+        
+        chunks.forEach((chunk, idx) => {
+            const card = document.createElement('div');
+            card.className = 'chunk-card';
+            
+            let badgeHtml = '';
+            if (chunk.metadata.is_table === 'true' || chunk.metadata.is_table === true) {
+                badgeHtml += `<span class="badge badge-table"><i class="ph ph-table"></i> Table</span>`;
+            }
+            if (chunk.metadata.page) {
+                badgeHtml += `<span class="badge"><i class="ph ph-file-dashed"></i> Page ${chunk.metadata.page}</span>`;
+            }
+            
+            card.innerHTML = `
+                <div class="chunk-header">
+                    <div><strong>#${idx + 1}</strong> | ID: <span style="font-family:monospace; opacity:0.7;">${chunk.id.substring(0,8)}...</span></div>
+                    <div class="chunk-badges">${badgeHtml}</div>
+                </div>
+                <div class="chunk-text" id="chunk-text-${chunk.id}">${escapeHtml(chunk.text)}</div>
+                <div class="chunk-actions">
+                    <button class="btn-accent btn-sm outline" onclick="document.getElementById('chunk-text-${chunk.id}').classList.toggle('expanded')">Expand/Collapse</button>
+                    <button class="btn-accent btn-sm" onclick="editChunk('${chunk.id}', this)">Edit Text</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+        
+    } catch (e) {
+        container.innerHTML = '<div style="text-align:center; color:var(--danger); padding: 2rem;">Error loading chunks.</div>';
+    }
+};
+
+window.editChunk = function(chunkId, btnEl) {
+    const textEl = document.getElementById(`chunk-text-${chunkId}`);
+    const currentText = textEl.innerText;
+    
+    // Replace text div with textarea
+    const textarea = document.createElement('textarea');
+    textarea.className = 'chunk-editor-textarea';
+    textarea.value = currentText;
+    textarea.id = `chunk-edit-input-${chunkId}`;
+    
+    textEl.replaceWith(textarea);
+    
+    // Change button to Save
+    btnEl.textContent = 'Save Changes';
+    btnEl.onclick = async () => {
+        btnEl.textContent = 'Saving...';
+        btnEl.disabled = true;
+        
+        const newText = textarea.value;
+        try {
+            const res = await fetch(`/api/workspace/${state.workspaceId}/rag/chunks/${chunkId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: newText })
+            });
+            
+            if (res.ok) {
+                showToast('Chunk updated successfully', 'success');
+                // Replace textarea with text div
+                const newTextEl = document.createElement('div');
+                newTextEl.className = 'chunk-text';
+                newTextEl.id = `chunk-text-${chunkId}`;
+                newTextEl.textContent = newText;
+                textarea.replaceWith(newTextEl);
+                
+                btnEl.textContent = 'Edit Text';
+                btnEl.disabled = false;
+                btnEl.onclick = () => editChunk(chunkId, btnEl);
+            } else {
+                throw new Error('Failed to update');
+            }
+        } catch (e) {
+            showToast('Error updating chunk', 'error');
+            btnEl.textContent = 'Save Changes';
+            btnEl.disabled = false;
+        }
+    };
+};

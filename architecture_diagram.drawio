@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-06-05T08:00:00.000Z" agent="AgentOS" version="24.0.0">
+  <diagram name="AgentOS RAG Architecture" id="rag-arch">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- ═══════ TITLE ═══════ -->
+        <mxCell id="title" value="&lt;b&gt;AgentOS — Hybrid RAG Architecture&lt;/b&gt;&lt;br&gt;LangGraph ReAct Agent + ChromaDB + BM25 + LLM-as-Judge" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontColor=#1a1a2e;" vertex="1" parent="1">
+          <mxGeometry x="350" y="20" width="900" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ═══════ USER / FRONTEND ═══════ -->
+        <mxCell id="user" value="&lt;b&gt;User&lt;/b&gt;" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="200" width="60" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="frontend" value="&lt;b&gt;Frontend (SPA)&lt;/b&gt;&lt;br&gt;&lt;hr&gt;index.html / app.js / styles.css&lt;br&gt;&lt;br&gt;• Dashboard&lt;br&gt;• File Manager&lt;br&gt;• Agent Chat + Debug Panel&lt;br&gt;• Settings + RAG Eval Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="170" y="150" width="230" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- ═══════ FASTAPI BACKEND ═══════ -->
+        <mxCell id="api" value="&lt;b&gt;FastAPI Backend&lt;/b&gt; (main.py)&lt;br&gt;&lt;hr&gt;POST /api/chat&lt;br&gt;POST /api/execute&lt;br&gt;POST /api/upload (auto-index)&lt;br&gt;GET /api/workspace/{id}/rag/eval&lt;br&gt;GET /api/workspace/{id}/rag/status&lt;br&gt;POST /api/workspace/{id}/rag/reindex" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="480" y="150" width="260" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- ═══════ LANGGRAPH AGENT ═══════ -->
+        <mxCell id="agent_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="90" width="760" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="agent_title" value="&lt;b&gt;LangGraph ReAct Agent&lt;/b&gt; (agent.py)" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontColor=#333;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="95" width="280" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Planner Node -->
+        <mxCell id="planner" value="&lt;b&gt;Planner Node&lt;/b&gt;&lt;br&gt;&lt;hr&gt;GPT-5.4-mini (temp=0)&lt;br&gt;• System prompt + file context&lt;br&gt;• Binds 21 tools&lt;br&gt;• Outputs plan: [{tool, args}]&lt;br&gt;• Token budget check" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="830" y="140" width="220" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- Human-in-the-Loop -->
+        <mxCell id="hitl" value="&lt;b&gt;Human-in-the-Loop&lt;/b&gt;&lt;br&gt;&lt;hr&gt;interrupt_before=[executor]&lt;br&gt;User reviews &amp; edits plan&lt;br&gt;Approve / Reject" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="140" width="200" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- Executor Node -->
+        <mxCell id="executor" value="&lt;b&gt;Executor Node&lt;/b&gt;&lt;br&gt;&lt;hr&gt;• Iterates plan steps&lt;br&gt;• Invokes tools via TOOL_MAP&lt;br&gt;• Per-step timing&lt;br&gt;• Error classification + retry (2x)&lt;br&gt;• Exponential backoff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1310" y="140" width="220" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- Agent Edges -->
+        <mxCell id="e_plan_hitl" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" parent="1" source="planner" target="hitl">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_plan_hitl_label" value="plan[]" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#82b366;" vertex="1" connectable="0" parent="e_plan_hitl">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <mxCell id="e_hitl_exec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#9673a6;strokeWidth=2;" edge="1" parent="1" source="hitl" target="executor">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_hitl_exec_label" value="approved plan" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#9673a6;" vertex="1" connectable="0" parent="e_hitl_exec">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <mxCell id="e_exec_plan" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6c8ebf;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="executor" target="planner">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1420" y="320"/><mxPoint x="940" y="320"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_exec_plan_label" value="results → re-plan" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#6c8ebf;" vertex="1" connectable="0" parent="e_exec_plan">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- ═══════ TOOLS ═══════ -->
+        <mxCell id="tools_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f8ff;strokeColor=#4a90d9;strokeWidth=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="400" width="760" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="tools_title" value="&lt;b&gt;21 LangChain Tools&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#333;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="405" width="180" height="20" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="tool_rag" value="&lt;b&gt;search_documents&lt;/b&gt;&lt;br&gt;(RAG Search)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#06b6d4;fontColor=#fff;strokeColor=#0891b2;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="815" y="435" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="tool_file" value="&lt;b&gt;File Tools&lt;/b&gt;&lt;br&gt;create/read/modify&lt;br&gt;txt, csv, xlsx, pdf" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3b82f6;fontColor=#fff;strokeColor=#2563eb;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="960" y="435" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="tool_data" value="&lt;b&gt;Dataset Tools&lt;/b&gt;&lt;br&gt;analyze, clean&lt;br&gt;transform, visualize" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#10b981;fontColor=#fff;strokeColor=#059669;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1105" y="435" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="tool_chart" value="&lt;b&gt;Chart Tools&lt;/b&gt;&lt;br&gt;bar, line, pie&lt;br&gt;histogram" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f59e0b;fontColor=#fff;strokeColor=#d97706;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="435" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="tool_vision" value="&lt;b&gt;Vision Tool&lt;/b&gt;&lt;br&gt;analyze_image&lt;br&gt;(GPT-4 Vision)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#8b5cf6;fontColor=#fff;strokeColor=#7c3aed;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1395" y="435" width="130" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_exec_tools" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#666;strokeWidth=1;" edge="1" parent="1" source="executor" target="tools_box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ═══════ HYBRID RAG PIPELINE ═══════ -->
+        <mxCell id="rag_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#06b6d4;strokeWidth=2;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="170" y="560" width="1100" height="300" as="geometry"/>
+        </mxCell>
+        <mxCell id="rag_title" value="&lt;b&gt;Hybrid RAG Pipeline&lt;/b&gt; (rag_engine.py)" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontColor=#0891b2;" vertex="1" parent="1">
+          <mxGeometry x="540" y="565" width="300" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- File Parsers -->
+        <mxCell id="parsers" value="&lt;b&gt;File Parsers&lt;/b&gt;&lt;br&gt;&lt;hr&gt;PDF → pdfplumber (text+tables)&lt;br&gt;CSV → pandas.read_csv&lt;br&gt;Excel → pandas.ExcelFile (per sheet)&lt;br&gt;TXT/MD/LOG → UTF-8 read" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#06b6d4;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="190" y="610" width="210" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- Chunker -->
+        <mxCell id="chunker" value="&lt;b&gt;Recursive Chunker&lt;/b&gt;&lt;br&gt;&lt;hr&gt;chunk_size=1000 chars&lt;br&gt;chunk_overlap=200 chars&lt;br&gt;Splits: ¶¶ → ¶ → . → space" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#06b6d4;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="190" y="740" width="210" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- Embeddings -->
+        <mxCell id="embeddings" value="&lt;b&gt;OpenAI Embeddings&lt;/b&gt;&lt;br&gt;&lt;hr&gt;text-embedding-3-large&lt;br&gt;3072 dimensions&lt;br&gt;Batch embedding" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#06b6d4;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="440" y="610" width="180" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- ChromaDB -->
+        <mxCell id="chromadb" value="&lt;b&gt;ChromaDB&lt;/b&gt;&lt;br&gt;&lt;hr&gt;Persistent vector store&lt;br&gt;Cosine similarity space&lt;br&gt;Per-workspace collections&lt;br&gt;Returns top-20 + distances" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#06b6d4;fontColor=#fff;strokeColor=#0891b2;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="440" y="735" width="180" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- BM25 -->
+        <mxCell id="bm25" value="&lt;b&gt;BM25Okapi&lt;/b&gt;&lt;br&gt;&lt;hr&gt;Keyword (lexical) search&lt;br&gt;In-memory index per workspace&lt;br&gt;Cached, rebuilt on re-index&lt;br&gt;Returns top-20 + raw scores" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#8b5cf6;fontColor=#fff;strokeColor=#7c3aed;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="660" y="735" width="190" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- RRF -->
+        <mxCell id="rrf" value="&lt;b&gt;Reciprocal Rank Fusion&lt;/b&gt;&lt;br&gt;&lt;hr&gt;k = 60&lt;br&gt;score = Σ 1/(k + rank)&lt;br&gt;Merges vector + BM25 rankings&lt;br&gt;Returns top-8 results" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#10b981;fontColor=#fff;strokeColor=#059669;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="890" y="650" width="200" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- Diagnostics -->
+        <mxCell id="diagnostics" value="&lt;b&gt;Diagnostics Collector&lt;/b&gt;&lt;br&gt;&lt;hr&gt;Cosine similarities&lt;br&gt;BM25 raw scores&lt;br&gt;Agreement rate&lt;br&gt;Latency waterfall&lt;br&gt;Per-chunk source tracking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#10b981;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="890" y="775" width="200" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- RAG Edges -->
+        <mxCell id="e_parse_chunk" style="rounded=1;strokeColor=#06b6d4;strokeWidth=1;" edge="1" parent="1" source="parsers" target="chunker">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_chunk_embed" style="rounded=1;strokeColor=#06b6d4;strokeWidth=1;" edge="1" parent="1" source="chunker" target="embeddings">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_embed_chroma" style="rounded=1;strokeColor=#06b6d4;strokeWidth=1;" edge="1" parent="1" source="embeddings" target="chromadb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_chroma_rrf" style="rounded=1;strokeColor=#06b6d4;strokeWidth=2;" edge="1" parent="1" source="chromadb" target="rrf">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_chroma_rrf_label" value="vector results" style="edgeLabel;html=1;align=center;fontSize=9;fontColor=#06b6d4;" vertex="1" connectable="0" parent="e_chroma_rrf">
+          <mxGeometry relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+        <mxCell id="e_bm25_rrf" style="rounded=1;strokeColor=#8b5cf6;strokeWidth=2;" edge="1" parent="1" source="bm25" target="rrf">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_bm25_rrf_label" value="keyword results" style="edgeLabel;html=1;align=center;fontSize=9;fontColor=#8b5cf6;" vertex="1" connectable="0" parent="e_bm25_rrf">
+          <mxGeometry relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+        <mxCell id="e_rrf_diag" style="rounded=1;strokeColor=#10b981;strokeWidth=1;" edge="1" parent="1" source="rrf" target="diagnostics">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Connect RAG tool to RAG pipeline -->
+        <mxCell id="e_tool_rag_pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#06b6d4;strokeWidth=2;dashed=1;" edge="1" parent="1" source="tool_rag" target="rrf">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="880" y="520"/><mxPoint x="990" y="520"/></Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ═══════ LLM-AS-JUDGE ═══════ -->
+        <mxCell id="judge" value="&lt;b&gt;LLM-as-Judge Evaluator&lt;/b&gt;&lt;br&gt;(rag/evaluator.py)&lt;br&gt;&lt;hr&gt;GPT-4.1-mini (temp=0)&lt;br&gt;&lt;br&gt;• Faithfulness (0-1)&lt;br&gt;• Answer Relevancy (0-1)&lt;br&gt;• Context Precision (0-1)&lt;br&gt;&lt;br&gt;Overall = weighted avg" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;spacingLeft=10;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1310" y="570" width="220" height="180" as="geometry"/>
+        </mxCell>
+
+        <!-- Connect API to agent -->
+        <mxCell id="e_api_agent" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d6b656;strokeWidth=2;" edge="1" parent="1" source="api" target="planner">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Connect frontend to API -->
+        <mxCell id="e_front_api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#996185;strokeWidth=2;" edge="1" parent="1" source="frontend" target="api">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_front_api_label" value="REST API" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#996185;" vertex="1" connectable="0" parent="e_front_api">
+          <mxGeometry relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- Connect user to frontend -->
+        <mxCell id="e_user_front" style="rounded=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" parent="1" source="user" target="frontend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Connect API to judge -->
+        <mxCell id="e_api_judge" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#b85450;strokeWidth=2;dashed=1;" edge="1" parent="1" source="api" target="judge">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="610" y="540"/><mxPoint x="1420" y="540"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_api_judge_label" value="post-execution eval" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#b85450;" vertex="1" connectable="0" parent="e_api_judge">
+          <mxGeometry relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- ═══════ LEGEND ═══════ -->
+        <mxCell id="legend_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#ccc;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="400" width="200" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend_title" value="&lt;b&gt;Legend&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="70" y="405" width="60" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg1" value="Vector Search (ChromaDB)" style="text;html=1;align=left;fontSize=10;fontColor=#06b6d4;" vertex="1" parent="1">
+          <mxGeometry x="70" y="430" width="180" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg2" value="Keyword Search (BM25)" style="text;html=1;align=left;fontSize=10;fontColor=#8b5cf6;" vertex="1" parent="1">
+          <mxGeometry x="70" y="450" width="180" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg3" value="Fusion &amp; Ranking (RRF)" style="text;html=1;align=left;fontSize=10;fontColor=#10b981;" vertex="1" parent="1">
+          <mxGeometry x="70" y="470" width="180" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg4" value="LLM-as-Judge Evaluation" style="text;html=1;align=left;fontSize=10;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="70" y="490" width="180" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg5" value="Human-in-the-Loop" style="text;html=1;align=left;fontSize=10;fontColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="70" y="510" width="180" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ═══════ STATE STORE ═══════ -->
+        <mxCell id="state" value="&lt;b&gt;AgentState&lt;/b&gt;&lt;br&gt;(LangGraph MemorySaver)&lt;br&gt;&lt;hr&gt;messages[], plan[], results[]&lt;br&gt;workspace_id, token_usage" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f5f5f5;strokeColor=#666;align=center;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="270" width="170" height="90" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
