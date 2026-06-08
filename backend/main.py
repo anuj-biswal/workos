@@ -142,6 +142,8 @@ async def chat(req: ChatRequest):
     config = {"configurable": {"thread_id": req.workspace_id}}
     
     def _run_planner():
+        from tools.rag_tools import clear_turn_context
+        clear_turn_context()
         initial_state = {"messages": [HumanMessage(content=req.message)], "workspace_id": req.workspace_id}
         for _ in graph.stream(initial_state, config):
             pass
@@ -195,6 +197,8 @@ async def execute_plan(req: PlanApproval):
     config = {"configurable": {"thread_id": req.workspace_id}}
 
     def _run_executor():
+        from tools.rag_tools import clear_turn_context
+        clear_turn_context()
         graph.update_state(config, {"plan": req.plan_steps})
         all_results = []
         

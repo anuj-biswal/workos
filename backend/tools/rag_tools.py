@@ -20,6 +20,12 @@ _last_diagnostics: dict | None = None
 # Last retrieved chunks (for LLM-as-judge evaluation)
 _last_context_chunks: list[dict] = []
 
+def clear_turn_context():
+    """Clear the accumulated diagnostics and context chunks for a new turn."""
+    global _last_diagnostics, _last_context_chunks
+    _last_diagnostics = None
+    _last_context_chunks = []
+
 def set_rag_engine(engine):
     """Called from main.py to inject the RAG engine singleton."""
     global _rag_engine
@@ -75,9 +81,27 @@ def search_documents(query: str, workspace_id: str = "default-workspace") -> str
     results = search_result.get("results", [])
     diagnostics = search_result.get("diagnostics", {})
 
-    # Store diagnostics for the debug panel
-    _last_diagnostics = diagnostics
-    _last_context_chunks = results  # store for LLM-as-judge
+    # Store and accumulate diagnostics for the debug panel
+    global _last_diagnostics, _last_context_chunks
+    if _last_diagnostics is None:
+        _last_diagnostics = dict(diagnostics)
+        _last_diagnostics["query"] = query
+    else:
+        _last_diagnostics["query"] += f" | {query}"
+        
+        # safely accumulate latency
+        old_lat = _last_diagnostics.get("latency_ms", {}).get("total", 0)
+        new_lat = diagnostics.get("latency_ms", {}).get("total", 0)
+        _last_diagnostics["latency_ms"] = _last_diagnostics.get("latency_ms", {})
+        _last_diagnostics["latency_ms"]["total"] = old_lat + new_lat
+        
+        # Avg cosine sim & others can just remain the last or we can average, we'll keep the last search's stats for simplicity
+
+    # Accumulate context chunks without strict duplicates
+    existing_texts = {c.get("text") for c in _last_context_chunks}
+    for r in results:
+        if r.get("text") not in existing_texts:
+            _last_context_chunks.append(r)
 
     # Add to search history (rolling window of 20)
     _search_history.append({
