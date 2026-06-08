@@ -444,7 +444,7 @@ async function openFilePreview(filename, highlightText = null) {
     const panel = document.getElementById('file-preview-panel');
     const content = document.getElementById('preview-content');
     document.getElementById('preview-filename').textContent = filename;
-    document.getElementById('preview-download').href = `/api/workspace/${state.workspaceId}/download/${filename}`;
+    document.getElementById('preview-download').href = `/api/workspace/${encodeURIComponent(state.workspaceId)}/download/${encodeURIComponent(filename)}`;
     
     content.innerHTML = '<div style="text-align:center; padding: 2rem;"><i class="ph ph-spinner ph-spin" style="font-size: 2rem;"></i> Loading preview...</div>';
     panel.style.display = 'flex';
@@ -452,9 +452,11 @@ async function openFilePreview(filename, highlightText = null) {
     panel.classList.add('show');
     
     try {
-        let url = `/api/workspace/${state.workspaceId}/preview/${filename}`;
+        let url = `/api/workspace/${encodeURIComponent(state.workspaceId)}/preview/${encodeURIComponent(filename)}`;
         if (highlightText) {
-            url += `?highlight=${encodeURIComponent(highlightText)}`;
+            // Truncate to 300 chars to avoid 414 URI Too Long on reverse proxies
+            const truncatedHighlight = highlightText.substring(0, 300);
+            url += `?highlight=${encodeURIComponent(truncatedHighlight)}`;
         }
         const res = await fetch(url);
         if (!res.ok) {
