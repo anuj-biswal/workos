@@ -105,7 +105,7 @@ def read_pdf_file(filename: str, workspace_id: str = "default-workspace") -> str
             import pdfplumber
             text_parts = []
             with pdfplumber.open(path) as pdf:
-                for i, page in enumerate(pdf.pages):
+                for i, page in enumerate(pdf.pages[:10]):
                     page_text = page.extract_text() or ""
                     # Also extract tables if present
                     tables = page.extract_tables()
@@ -119,6 +119,8 @@ def read_pdf_file(filename: str, workspace_id: str = "default-workspace") -> str
                             page_text += table_str
                     if page_text.strip():
                         text_parts.append(page_text.strip())
+                if len(pdf.pages) > 10:
+                    text_parts.append("\n[NOTE: PDF truncated at 10 pages to prevent timeout. Use search_documents to query the full document.]")
             return "\n\n".join(text_parts)
         except ImportError:
             pass
@@ -127,8 +129,10 @@ def read_pdf_file(filename: str, workspace_id: str = "default-workspace") -> str
         with open(path, 'rb') as f:
             reader = PyPDF2.PdfReader(f)
             text = ""
-            for page in reader.pages:
+            for i, page in enumerate(reader.pages[:10]):
                 text += page.extract_text() + "\n"
+            if len(reader.pages) > 10:
+                text += "\n[NOTE: PDF truncated at 10 pages to prevent timeout. Use search_documents to query the full document.]"
             return text
     except Exception as e:
         return f"Error reading PDF: {e}"

@@ -9,7 +9,7 @@ import json
 logger = logging.getLogger(__name__)
 
 class QueryExpander:
-    def __init__(self, openai_client: OpenAI, model: str = "gpt-5.4-mini"):
+    def __init__(self, openai_client: OpenAI, model: str = "gpt-4o-mini"):
         self.client = openai_client
         self.model = model
 

@@ -43,7 +43,7 @@ import logging
 VECTORSTORE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vectorstore")
 rag_engine = RAGEngine(persist_dir=VECTORSTORE_DIR)
 set_rag_engine(rag_engine)
-rag_evaluator = RAGEvaluator(model="gpt-4.1-mini")
+rag_evaluator = RAGEvaluator(model="gpt-4o-mini")
 logging.info("RAG engine + evaluator initialized")
 
 # ── Rate limiter (in-memory sliding window) ──────────────────────────────────

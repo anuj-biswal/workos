@@ -189,7 +189,7 @@ def planner_node(state: AgentState):
             }
         }
 
-    llm = ChatOpenAI(model="gpt-5.4-mini", temperature=0).bind_tools(ALL_TOOLS)
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0).bind_tools(ALL_TOOLS)
     
     # Inject workspace file context
     workspace_files = _get_workspace_files(state.get("workspace_id", "default-workspace"))

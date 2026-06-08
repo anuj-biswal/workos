@@ -63,7 +63,7 @@ RETRIEVED CHUNKS:
 class RAGEvaluator:
     """Evaluate RAG outputs using LLM-as-judge."""
 
-    def __init__(self, model: str = "gpt-4.1-mini"):
+    def __init__(self, model: str = "gpt-4o-mini"):
         self.client = OpenAI()
         self.model = model
         self._eval_history: list[dict] = []
