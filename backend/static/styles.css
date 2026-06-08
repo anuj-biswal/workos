@@ -1027,32 +1027,33 @@ input:focus, select:focus, textarea:focus {
 /* ═══════════════════ RAG DEBUG PANEL ═══════════════════ */
 .debug-panel-container { padding: 0 !important; }
 .debug-panel {
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(6, 182, 212, 0.25);
-    border-radius: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 18px 18px 18px 0;
     overflow: hidden;
     font-size: 0.82rem;
+    box-shadow: var(--shadow-sm);
 }
 .debug-panel.collapsed .debug-panel-body { display: none; }
 .debug-panel.collapsed .debug-panel-toggle i { transform: rotate(-90deg); }
 .debug-panel-header {
     display: flex; justify-content: space-between; align-items: center;
     padding: 0.75rem 1rem;
-    background: rgba(6, 182, 212, 0.08);
+    background: rgba(0, 0, 0, 0.02);
     cursor: pointer;
     font-weight: 600;
-    color: #06b6d4;
-    border-bottom: 1px solid rgba(6, 182, 212, 0.15);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
     user-select: none;
 }
-.debug-panel-header:hover { background: rgba(6, 182, 212, 0.12); }
+.debug-panel-header:hover { background: rgba(0, 0, 0, 0.04); }
 .debug-panel-toggle i { transition: transform 0.2s; }
 .debug-panel-body { padding: 0.75rem 1rem; }
 
 .dbg-section {
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid var(--border-color);
 }
 .dbg-section:last-child { border-bottom: none; margin-bottom: 0; }
 .dbg-section-title {
@@ -1061,7 +1062,7 @@ input:focus, select:focus, textarea:focus {
 }
 .dbg-tag {
     font-size: 0.7rem; padding: 0.1rem 0.5rem; border-radius: 8px;
-    background: rgba(6,182,212,0.15); color: #06b6d4; font-weight: 500;
+    background: rgba(0,0,0,0.05); color: var(--text-primary); font-weight: 500;
 }
 
 .dbg-grid {
@@ -1069,7 +1070,8 @@ input:focus, select:focus, textarea:focus {
 }
 .dbg-stat {
     text-align: center; padding: 0.4rem;
-    background: rgba(255,255,255,0.03); border-radius: 8px;
+    background: var(--bg-primary); border-radius: 8px;
+    border: 1px solid var(--border-color);
 }
 .dbg-stat-val { display: block; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
 .dbg-stat-label { font-size: 0.7rem; color: var(--text-secondary); }
@@ -1077,7 +1079,7 @@ input:focus, select:focus, textarea:focus {
 /* Score Bars */
 .dbg-bar-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; }
 .dbg-bar-label { width: 100px; font-size: 0.75rem; color: var(--text-secondary); flex-shrink: 0; }
-.dbg-bar-track { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+.dbg-bar-track { flex: 1; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; }
 .dbg-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
 .dbg-bar-val { width: 55px; text-align: right; font-size: 0.75rem; font-family: 'SF Mono', monospace; color: var(--text-secondary); flex-shrink: 0; }
 
@@ -1085,21 +1087,21 @@ input:focus, select:focus, textarea:focus {
 .dbg-waterfall { display: flex; flex-direction: column; gap: 0.25rem; }
 .dbg-wf-row { display: flex; align-items: center; gap: 0.5rem; }
 .dbg-wf-label { width: 100px; font-size: 0.75rem; color: var(--text-secondary); flex-shrink: 0; }
-.dbg-wf-track { flex: 1; height: 10px; background: rgba(255,255,255,0.04); border-radius: 5px; overflow: hidden; }
+.dbg-wf-track { flex: 1; height: 10px; background: rgba(0,0,0,0.04); border-radius: 5px; overflow: hidden; }
 .dbg-wf-bar { height: 100%; border-radius: 5px; transition: width 0.6s ease; min-width: 2px; }
 .dbg-wf-ms { width: 45px; text-align: right; font-size: 0.75rem; color: var(--text-secondary); font-family: 'SF Mono', monospace; flex-shrink: 0; }
 
 /* Chunk Cards */
 .dbg-chunks { display: flex; flex-direction: column; gap: 0.4rem; max-height: 320px; overflow-y: auto; }
 .dbg-chunk-card {
-    background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.5rem 0.6rem;
-    border: 1px solid rgba(255,255,255,0.05);
+    background: var(--bg-primary); border-radius: 8px; padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border-color);
 }
 .dbg-chunk-header {
     display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem;
     font-size: 0.78rem;
 }
-.dbg-chunk-rank { font-weight: 700; color: #06b6d4; }
+.dbg-chunk-rank { font-weight: 700; color: var(--accent); }
 .dbg-chunk-file { color: var(--text-primary); font-weight: 500; }
 .dbg-chunk-page { color: var(--text-secondary); font-size: 0.72rem; }
 .dbg-method-tag {
@@ -1109,12 +1111,12 @@ input:focus, select:focus, textarea:focus {
 .dbg-method-bm25 { background: rgba(139,92,246,0.15); color: #8b5cf6; }
 
 /* LLM Evaluation */
-.dbg-eval-section { background: rgba(168,85,247,0.04); border-radius: 8px; padding: 0.6rem; }
+.dbg-eval-section { background: rgba(0,0,0,0.02); border-radius: 8px; padding: 0.6rem; border: 1px solid var(--border-color); }
 .dbg-eval-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
 .dbg-eval-card {
     text-align: center; padding: 0.6rem;
-    background: rgba(255,255,255,0.03); border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.05);
+    background: var(--bg-primary); border-radius: 8px;
+    border: 1px solid var(--border-color);
 }
 .dbg-eval-score { font-size: 1.5rem; font-weight: 800; }
 .dbg-eval-label { font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); margin-top: 0.1rem; }

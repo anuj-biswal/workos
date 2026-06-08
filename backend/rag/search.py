@@ -45,46 +45,59 @@ User Question: {query}
             logger.error(f"Query expansion failed: {e}")
             return [query]
 
-class ReRanker:
-    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
-        self.model_name = model_name
-        self.model = None
-        self._initialized = False
-
-    def _get_model(self):
-        if not self._initialized:
-            import os
-            if os.getenv("ENABLE_HEAVY_ML", "false").lower() == "true":
-                try:
-                    from sentence_transformers import CrossEncoder
-                    self.model = CrossEncoder(self.model_name)
-                except ImportError:
-                    logging.warning("sentence-transformers not available. Re-ranking disabled.")
-                    self.model = None
-                except Exception as e:
-                    logger.error(f"Failed to load ReRanker: {e}")
-                    self.model = None
-            else:
-                logging.info("ENABLE_HEAVY_ML is false. Re-ranking disabled.")
-                self.model = None
-            self._initialized = True
-        return self.model
+class OpenAIReRanker:
+    def __init__(self, openai_client: OpenAI, model: str = "gpt-4o-mini"):
+        self.client = openai_client
+        self.model = model
 
     def rerank(self, query: str, results: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
-        model = self._get_model()
-        if not model or not results:
+        if not results:
             return results[:top_k]
-            
-        pairs = [[query, res["text"]] for res in results]
+
+        # Prepare prompt for batch scoring
+        chunks_text = "\n\n".join([f"Chunk {i+1}:\n{res['text']}" for i, res in enumerate(results)])
+        prompt = f"""You are a relevance scoring expert. Given a user query and a list of document chunks, score each chunk's relevance to answering the query on a scale of 0 to 10.
+- 10: The chunk perfectly answers the query.
+- 5: The chunk is somewhat relevant but incomplete.
+- 0: The chunk is completely irrelevant.
+
+Respond with ONLY a JSON array of floats corresponding to the scores for each chunk in order. Example: [8.5, 2.0, 0.0]
+
+User Query: {query}
+
+{chunks_text}"""
+
         try:
-            scores = self.model.predict(pairs)
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=200,
+            )
+            content = response.choices[0].message.content.strip()
+            
+            # Extract JSON from response
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+            
+            scores = json.loads(content)
+            
+            if not isinstance(scores, list) or len(scores) != len(results):
+                logger.warning("Reranker returned malformed scores. Falling back to original ordering.")
+                return results[:top_k]
+                
             for i, res in enumerate(results):
-                res["rerank_score"] = float(scores[i])
+                # Normalize to 0-1 range
+                res["rerank_score"] = min(max(float(scores[i]) / 10.0, 0.0), 1.0)
                 
             results.sort(key=lambda x: x["rerank_score"], reverse=True)
             return results[:top_k]
+            
         except Exception as e:
-            logger.error(f"Re-ranking failed: {e}")
+            logger.error(f"OpenAI re-ranking failed: {e}")
             return results[:top_k]
 
 class HybridSearchEngine:

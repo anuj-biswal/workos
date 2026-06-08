@@ -59,6 +59,36 @@ QUESTION: {question}
 RETRIEVED CHUNKS:
 {chunks}"""
 
+CONTEXT_RECALL_PROMPT = """You are an impartial evaluator. Given a user QUESTION, the CONTEXT (retrieved document chunks), and the AI ANSWER, score the context recall.
+
+Context Recall = the degree to which the retrieved CONTEXT is sufficient to answer the QUESTION.
+- 1.0 = context contains all information needed
+- 0.5 = context contains some information but is missing key parts
+- 0.0 = context is completely useless for answering the question
+
+Respond with ONLY a JSON object: {{"score": <float 0-1>, "reasoning": "<1-2 sentence explanation>"}}
+
+QUESTION: {question}
+
+CONTEXT:
+{context}"""
+
+ANSWER_CORRECTNESS_PROMPT = """You are an impartial evaluator. Given a user QUESTION, the CONTEXT (retrieved document chunks), and the AI ANSWER, score the answer's factual correctness.
+
+Answer Correctness = the degree to which the ANSWER is factually correct based on the CONTEXT and free of hallucinations or logical errors.
+- 1.0 = fully correct and accurate
+- 0.5 = partially correct or contains minor errors
+- 0.0 = completely incorrect or major hallucination
+
+Respond with ONLY a JSON object: {{"score": <float 0-1>, "reasoning": "<1-2 sentence explanation>"}}
+
+QUESTION: {question}
+
+CONTEXT:
+{context}
+
+ANSWER: {answer}"""
+
 
 class RAGEvaluator:
     """Evaluate RAG outputs using LLM-as-judge."""
@@ -138,12 +168,18 @@ class RAGEvaluator:
         context_precision = self._call_judge(
             CONTEXT_PRECISION_PROMPT.format(question=question, chunks=chunks_text)
         )
+        context_recall = self._call_judge(
+            CONTEXT_RECALL_PROMPT.format(question=question, context=context_text)
+        )
+        answer_correctness = self._call_judge(
+            ANSWER_CORRECTNESS_PROMPT.format(question=question, context=context_text, answer=answer)
+        )
 
         t_end = time.perf_counter()
 
         # Compute overall weighted score
         scores = []
-        for metric in [faithfulness, relevancy, context_precision]:
+        for metric in [faithfulness, relevancy, context_precision, context_recall, answer_correctness]:
             if metric.get("score") is not None:
                 scores.append(metric["score"])
         overall = round(sum(scores) / len(scores), 4) if scores else None
@@ -152,6 +188,8 @@ class RAGEvaluator:
             "faithfulness": faithfulness,
             "relevancy": relevancy,
             "context_precision": context_precision,
+            "context_recall": context_recall,
+            "answer_correctness": answer_correctness,
             "overall_score": overall,
             "eval_latency_ms": round((t_end - t_start) * 1000, 1),
             "timestamp": time.time(),
@@ -177,6 +215,8 @@ class RAGEvaluator:
         faith_scores = [e["faithfulness"]["score"] for e in self._eval_history if e["faithfulness"].get("score") is not None]
         rel_scores = [e["relevancy"]["score"] for e in self._eval_history if e["relevancy"].get("score") is not None]
         cp_scores = [e["context_precision"]["score"] for e in self._eval_history if e["context_precision"].get("score") is not None]
+        cr_scores = [e.get("context_recall", {}).get("score") for e in self._eval_history if e.get("context_recall", {}).get("score") is not None]
+        ac_scores = [e.get("answer_correctness", {}).get("score") for e in self._eval_history if e.get("answer_correctness", {}).get("score") is not None]
         overall_scores = [e["overall_score"] for e in self._eval_history if e.get("overall_score") is not None]
 
         def _avg(lst):
@@ -187,5 +227,7 @@ class RAGEvaluator:
             "avg_faithfulness": _avg(faith_scores),
             "avg_relevancy": _avg(rel_scores),
             "avg_context_precision": _avg(cp_scores),
+            "avg_context_recall": _avg(cr_scores),
+            "avg_answer_correctness": _avg(ac_scores),
             "avg_overall": _avg(overall_scores),
         }

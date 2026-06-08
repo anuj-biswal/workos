@@ -11,7 +11,7 @@ from PIL import Image
 
 from .parsers import DocumentParserFactory
 from .chunker import TableAwareChunker
-from .search import HybridSearchEngine, QueryExpander, ReRanker
+from .search import HybridSearchEngine, QueryExpander, OpenAIReRanker
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +26,21 @@ class RAGEngine:
         self.openai_client = OpenAI()
         self.hybrid_search_engine = HybridSearchEngine()
         self.query_expander = QueryExpander(self.openai_client)
-        self.reranker = ReRanker()
+        self.reranker = OpenAIReRanker(self.openai_client)
         self.chunker = TableAwareChunker()
-        
-    @property
-    def client(self):
-        if self._client is None:
-            import chromadb
-            self._client = chromadb.PersistentClient(path=self.persist_dir)
-        return self._client
         
         # In-memory LRU cache for PDF page images could be added here
         self._pdf_page_cache = {}
         
         # Load all workspaces BM25 indexes lazily when searched
         logger.info(f"Expert RAG Engine initialized with storage at {persist_dir}")
+
+    @property
+    def client(self):
+        if self._client is None:
+            import chromadb
+            self._client = chromadb.PersistentClient(path=self.persist_dir)
+        return self._client
 
     def _collection_name(self, workspace_id: str) -> str:
         safe = workspace_id.replace("/", "_").replace("\\", "_")
@@ -316,6 +316,7 @@ class RAGEngine:
 
         # Format output
         output_results = []
+        per_result_debug = []
         for r in final_results:
             output_results.append({
                 "id": r["id"],
@@ -324,12 +325,49 @@ class RAGEngine:
                 "page": r.get("metadata", {}).get("page", 1),
                 "score": r.get("rerank_score", r.get("rrf_score", 0.0))
             })
+            
+            found_by = []
+            if r.get("found_by_vector"): found_by.append("vector")
+            if r.get("found_by_bm25"): found_by.append("bm25")
+            
+            per_result_debug.append({
+                "id": r["id"],
+                "filename": r.get("metadata", {}).get("filename", ""),
+                "page": r.get("metadata", {}).get("page", 1),
+                "cosine_similarity": r.get("score"),
+                "bm25_score": r.get("bm25_score"),
+                "rrf_score": r.get("rrf_score"),
+                "rerank_score": r.get("rerank_score"),
+                "found_by": found_by
+            })
+
+        # Calculate metrics
+        cosine_scores = [r["score"] for r in vector_results if "score" in r]
+        bm25_scores = [r["bm25_score"] for r in bm25_results if "bm25_score" in r]
+        
+        vector_ids = {r["id"] for r in vector_results}
+        bm25_ids = {r["id"] for r in bm25_results}
+        overlap = len(vector_ids.intersection(bm25_ids))
+        union_len = len(vector_ids.union(bm25_ids))
+        agreement_rate = overlap / union_len if union_len > 0 else 0.0
+        
+        source_files = {r.get("filename", "") for r in output_results}
 
         diagnostics = {
             "query": query,
             "expanded_queries": queries,
             "total_indexed_chunks": total_indexed,
             "results_returned": len(output_results),
+            "vector_results_count": len(vector_results),
+            "bm25_results_count": len(bm25_results),
+            "vector_bm25_overlap": overlap,
+            "agreement_rate": agreement_rate,
+            "avg_cosine_similarity": sum(cosine_scores)/len(cosine_scores) if cosine_scores else 0.0,
+            "max_cosine_similarity": max(cosine_scores) if cosine_scores else 0.0,
+            "avg_bm25_score": sum(bm25_scores)/len(bm25_scores) if bm25_scores else 0.0,
+            "max_bm25_score": max(bm25_scores) if bm25_scores else 0.0,
+            "source_diversity": len(source_files),
+            "per_result_debug": per_result_debug,
             "latency_ms": {
                 "expansion": round((t_expand_end - t_expand_start) * 1000, 1),
                 "vector_search": round((t_vec_end - t_vec_start) * 1000, 1),

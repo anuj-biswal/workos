@@ -121,7 +121,7 @@ RAG SEARCH (CRITICAL — USE THIS FIRST):
 - When the user asks questions about document content (summaries, comparisons, specific data, analysis), ALWAYS use `search_documents` FIRST instead of reading entire files.
 - `search_documents` uses AI-powered hybrid search (semantic + keyword) to find the most relevant passages across ALL uploaded documents. It returns excerpts with source citations (filename + page number).
 - Only use `read_pdf_file`, `read_text_file`, etc. when: (a) the user explicitly asks to see the FULL content of a file, (b) search_documents returns no results and you need to fall back, or (c) you need the complete file for data operations like charting.
-- When presenting results from search_documents, ALWAYS cite the source: mention the filename and page number.
+- When presenting results from search_documents, ALWAYS cite the source using the exact format `[Source: filename.pdf, page N]` or `[Source: filename.csv]`. This format is REQUIRED for the UI to render clickable citation badges.
 - For comparisons across multiple documents, call search_documents with targeted queries (e.g., "revenue Q4 2025" rather than vague queries like "compare").
 
 CRITICAL RULES:

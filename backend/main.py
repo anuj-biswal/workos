@@ -315,7 +315,7 @@ async def download_file(workspace_id: str, filename: str):
     return FileResponse(file_path, filename=filename)
 
 @app.get("/api/workspace/{workspace_id}/preview/{filename}")
-async def preview_file(workspace_id: str, filename: str):
+async def preview_file(workspace_id: str, filename: str, highlight: Optional[str] = None):
     """Return file content for inline preview."""
     file_path = os.path.join(BASE_WORKSPACE_DIR, workspace_id, filename)
     if not os.path.exists(file_path):
@@ -327,6 +327,20 @@ async def preview_file(workspace_id: str, filename: str):
         if ftype == "text":
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read(50_000)  # cap at 50KB
+            
+            if highlight:
+                import html
+                content_esc = html.escape(content)
+                highlight_esc = html.escape(highlight)
+                if highlight_esc in content_esc:
+                    content_esc = content_esc.replace(highlight_esc, f'<mark class="highlight-chunk" style="background-color: rgba(250, 204, 21, 0.4); padding: 2px; border-radius: 2px;">{highlight_esc}</mark>')
+                else:
+                    lines = [l.strip() for l in highlight_esc.split('\n') if len(l.strip()) > 4]
+                    for l in lines:
+                        if l in content_esc:
+                            content_esc = content_esc.replace(l, f'<mark class="highlight-chunk" style="background-color: rgba(250, 204, 21, 0.4); padding: 2px; border-radius: 2px;">{l}</mark>')
+                return {"type": "html", "content": f"<pre style='font-size: 0.8rem; white-space: pre-wrap; word-break: break-all;'>{content_esc}</pre>"}
+                
             return {"type": "text", "content": content}
         
         elif ftype == "csv":

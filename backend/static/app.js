@@ -440,7 +440,7 @@ function updateSidebarFileList() {
     });
 }
 
-async function openFilePreview(filename) {
+async function openFilePreview(filename, highlightText = null) {
     const panel = document.getElementById('file-preview-panel');
     const content = document.getElementById('preview-content');
     document.getElementById('preview-filename').textContent = filename;
@@ -452,7 +452,11 @@ async function openFilePreview(filename) {
     panel.classList.add('show');
     
     try {
-        const res = await fetch(`/api/workspace/${state.workspaceId}/preview/${filename}`);
+        let url = `/api/workspace/${state.workspaceId}/preview/${filename}`;
+        if (highlightText) {
+            url += `?highlight=${encodeURIComponent(highlightText)}`;
+        }
+        const res = await fetch(url);
         if (!res.ok) {
             content.innerHTML = '<div style="text-align:center; padding: 2rem; color: var(--danger);">Preview not available for this file type.</div>';
             return;
@@ -461,6 +465,14 @@ async function openFilePreview(filename) {
         
         if (data.type === 'text') {
             content.innerHTML = `<pre style="font-size: 0.8rem; white-space: pre-wrap; word-break: break-all;">${escapeHtml(data.content)}</pre>`;
+        } else if (data.type === 'html') {
+            content.innerHTML = data.content;
+            setTimeout(() => {
+                const mark = content.querySelector('mark.highlight-chunk');
+                if (mark) {
+                    mark.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }
+            }, 100);
         } else if (data.type === 'table') {
             // Simple HTML table generator from array of dicts
             if (!data.content.length) {
@@ -589,9 +601,9 @@ function renderMarkdown(text) {
     const citationRegex = /\[Source:\s*([^,\]]+)(?:,\s*page\s*(\d+))?\]/gi;
     text = text.replace(citationRegex, (match, filename, page) => {
         if (page) {
-            return `<span class="citation-badge" onclick="openPdfCitation('${filename}', ${page})"><i class="ph ph-file-pdf"></i> ${filename} (p.${page})</span>`;
+            return `<span class="citation-badge" onclick="viewSource('${filename}', ${page}, '')" style="cursor:pointer; background:var(--bg-secondary); padding:2px 8px; border-radius:12px; border:1px solid var(--border-color); font-size:0.85rem; font-weight:500; display:inline-flex; align-items:center; gap:4px; box-shadow:0 1px 2px rgba(0,0,0,0.05); margin:0 2px; color:var(--accent);"><i class="ph ph-file-pdf"></i> ${filename} (p.${page})</span>`;
         } else {
-            return `<span class="citation-badge" onclick="navigateTo('files'); setTimeout(() => openFilePreview('${filename}'), 150)"><i class="ph ph-file"></i> ${filename}</span>`;
+            return `<span class="citation-badge" onclick="viewSource('${filename}', 1, '')" style="cursor:pointer; background:var(--bg-secondary); padding:2px 8px; border-radius:12px; border:1px solid var(--border-color); font-size:0.85rem; font-weight:500; display:inline-flex; align-items:center; gap:4px; box-shadow:0 1px 2px rgba(0,0,0,0.05); margin:0 2px; color:var(--accent);"><i class="ph ph-file"></i> ${filename}</span>`;
         }
     });
 
@@ -1309,10 +1321,12 @@ function renderDebugPanel(debug) {
         <div class="dbg-section-title"><i class="ph ph-timer"></i> Latency Waterfall <span class="dbg-tag">${totalMs.toFixed(0)}ms total</span></div>
         <div class="dbg-waterfall">`;
     const stages = [
+        {label: 'Expansion', ms: latency.expansion, color: '#f59e0b'},
         {label: 'Embedding', ms: latency.embedding, color: '#06b6d4'},
         {label: 'Vector Search', ms: latency.vector_search, color: '#3b82f6'},
         {label: 'BM25 Search', ms: latency.bm25_search, color: '#8b5cf6'},
         {label: 'RRF Fusion', ms: latency.fusion, color: '#10b981'},
+        {label: 'Reranking', ms: latency.rerank, color: '#ec4899'},
     ];
     stages.forEach(s => {
         const pct = (s.ms / totalMs * 100).toFixed(1);
@@ -1331,6 +1345,7 @@ function renderDebugPanel(debug) {
                 ${scoreBar(r.cosine_similarity, 1, 'Cosine', '#06b6d4')}
                 ${scoreBar(r.bm25_score, diag.max_bm25_score || 20, 'BM25', '#8b5cf6')}
                 ${scoreBar(r.rrf_score, 0.035, 'RRF', '#10b981')}
+                ${scoreBar(r.rerank_score, 1, 'Rerank', '#ec4899')}
             </div>`;
         });
         chunksHtml += '</div></div>';
@@ -1359,6 +1374,16 @@ function renderDebugPanel(debug) {
                     <div class="dbg-eval-score" style="color:${scoreColor(cp.score)}">${cp.score !== null && cp.score !== undefined ? (cp.score * 100).toFixed(0) + '%' : '—'}</div>
                     <div class="dbg-eval-label">Context Precision</div>
                     <div class="dbg-eval-desc">${cp.reasoning || ''}</div>
+                </div>
+                <div class="dbg-eval-card">
+                    <div class="dbg-eval-score" style="color:${scoreColor((llmEval.context_recall || {}).score)}">${llmEval.context_recall && llmEval.context_recall.score !== null && llmEval.context_recall.score !== undefined ? (llmEval.context_recall.score * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="dbg-eval-label">Context Recall</div>
+                    <div class="dbg-eval-desc">${(llmEval.context_recall || {}).reasoning || ''}</div>
+                </div>
+                <div class="dbg-eval-card">
+                    <div class="dbg-eval-score" style="color:${scoreColor((llmEval.answer_correctness || {}).score)}">${llmEval.answer_correctness && llmEval.answer_correctness.score !== null && llmEval.answer_correctness.score !== undefined ? (llmEval.answer_correctness.score * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="dbg-eval-label">Answer Correctness</div>
+                    <div class="dbg-eval-desc">${(llmEval.answer_correctness || {}).reasoning || ''}</div>
                 </div>
             </div>
             ${llmEval.overall_score !== null ? `<div class="dbg-overall">Overall: <strong style="color:${scoreColor(llmEval.overall_score)}">${(llmEval.overall_score * 100).toFixed(0)}%</strong></div>` : ''}
@@ -1445,6 +1470,16 @@ async function loadRagEvalDashboard() {
                     <div class="eval-card-title"><i class="ph ph-target"></i> Avg Relevancy</div>
                     <div class="eval-card-stat" style="color:${summary.avg_relevancy >= 0.8 ? '#10b981' : summary.avg_relevancy >= 0.5 ? '#f59e0b' : '#ef4444'}">${summary.avg_relevancy !== null && summary.avg_relevancy !== undefined ? (summary.avg_relevancy * 100).toFixed(0) + '%' : '—'}</div>
                     <div class="eval-card-label">Answer Quality</div>
+                </div>
+                <div class="eval-card">
+                    <div class="eval-card-title"><i class="ph ph-arrows-out-line-horizontal"></i> Context Recall</div>
+                    <div class="eval-card-stat" style="color:${summary.avg_context_recall >= 0.8 ? '#10b981' : summary.avg_context_recall >= 0.5 ? '#f59e0b' : '#ef4444'}">${summary.avg_context_recall !== null && summary.avg_context_recall !== undefined ? (summary.avg_context_recall * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="eval-card-label">Retrieval Recall</div>
+                </div>
+                <div class="eval-card">
+                    <div class="eval-card-title"><i class="ph ph-check-circle"></i> Answer Correctness</div>
+                    <div class="eval-card-stat" style="color:${summary.avg_answer_correctness >= 0.8 ? '#10b981' : summary.avg_answer_correctness >= 0.5 ? '#f59e0b' : '#ef4444'}">${summary.avg_answer_correctness !== null && summary.avg_answer_correctness !== undefined ? (summary.avg_answer_correctness * 100).toFixed(0) + '%' : '—'}</div>
+                    <div class="eval-card-label">Factual Accuracy</div>
                 </div>
             </div>
             ${history.length > 0 ? `
@@ -1639,6 +1674,16 @@ function zoomPdf(factor) {
     document.getElementById('pdf-page-img').style.transform = `scale(${currentPdfZoom})`;
 }
 
+window.viewSource = function(filename, pageNumber, encodedHighlightText) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const highlightText = encodedHighlightText ? decodeURIComponent(encodedHighlightText) : null;
+    if (ext === 'pdf') {
+        openPdfCitation(filename, pageNumber, highlightText);
+    } else {
+        openFilePreview(filename, highlightText);
+    }
+};
+
 // ── RAG Document Index Management ──────────────────────────────────────
 async function loadRagIndex() {
     const tbody = document.getElementById('rag-doc-list');
@@ -1729,7 +1774,7 @@ window.viewDocumentChunks = async function(filename) {
                 <div class="chunk-text" id="chunk-text-${chunk.id}">${escapeHtml(chunk.text)}</div>
                 <div class="chunk-actions">
                     <button class="btn-accent btn-sm outline" onclick="document.getElementById('chunk-text-${chunk.id}').classList.toggle('expanded')">Expand/Collapse</button>
-                    <button class="btn-accent btn-sm outline" onclick="openPdfCitation('${escapeHtml(filename)}', ${chunk.metadata.page || 1}, '${encodeURIComponent(chunk.text).replace(/'/g, "\\'")}')"><i class="ph ph-file-pdf"></i> View Source</button>
+                    <button class="btn-accent btn-sm outline" onclick="viewSource('${escapeHtml(filename)}', ${chunk.metadata.page || 1}, '${encodeURIComponent(chunk.text).replace(/'/g, "\\'")}')"><i class="ph ph-arrow-square-out"></i> View Source</button>
                     <button class="btn-accent btn-sm" onclick="editChunk('${chunk.id}', this)">Edit Text</button>
                 </div>
             `;
