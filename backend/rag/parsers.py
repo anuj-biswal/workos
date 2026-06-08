@@ -67,6 +67,39 @@ class DoclingParser(BaseParser):
             
         return sections
 
+class PdfPlumberParser(BaseParser):
+    def parse(self, file_path: str) -> List[DocumentSection]:
+        sections = []
+        try:
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                for i, page in enumerate(pdf.pages):
+                    text = page.extract_text()
+                    if text and text.strip():
+                        sections.append(DocumentSection(
+                            text=text.strip(),
+                            page=i+1,
+                            section_type="text"
+                        ))
+                    
+                    # Extract tables separately
+                    tables = page.extract_tables()
+                    for table in tables:
+                        table_str = "\n".join([" | ".join([str(c) if c is not None else "" for c in row]) for row in table if row])
+                        if table_str.strip():
+                            sections.append(DocumentSection(
+                                text=table_str,
+                                page=i+1,
+                                section_type="table",
+                                table_data=table
+                            ))
+        except ImportError:
+            raise ImportError("pdfplumber is not installed")
+        except Exception as e:
+            logger.error(f"PdfPlumber parsing failed for {file_path}: {e}")
+            raise
+        return sections
+
 class PyMuPDFParser(BaseParser):
     def parse(self, file_path: str) -> List[DocumentSection]:
         sections = []
@@ -180,7 +213,17 @@ class DocumentParserFactory:
                 except Exception as e:
                     logger.warning(f"Docling failed, falling back... {e}")
             
-            # Try PyMuPDF for PDFs (or if Docling isn't available)
+            # Try PdfPlumber (table-aware) next
+            if ext == '.pdf':
+                try:
+                    logger.info(f"Attempting PdfPlumber parse for {file_path}")
+                    sections = PdfPlumberParser().parse(file_path)
+                    if any(s.text.strip() for s in sections):
+                        return sections
+                except Exception as e:
+                    logger.warning(f"PdfPlumber failed, falling back to PyMuPDF... {e}")
+            
+            # Try PyMuPDF for PDFs (or if others fail)
             if ext == '.pdf':
                 try:
                     logger.info(f"Attempting PyMuPDF parse for {file_path}")

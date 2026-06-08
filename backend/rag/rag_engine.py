@@ -371,9 +371,9 @@ class RAGEngine:
 
     # ── PDF Image Rendering ──────────────────────────────────────────────
 
-    def render_pdf_page(self, file_path: str, page_number: int) -> Optional[bytes]:
+    def render_pdf_page(self, file_path: str, page_number: int, highlight_text: Optional[str] = None) -> Optional[bytes]:
         """Render a specific PDF page to a PNG image byte string."""
-        cache_key = f"{file_path}_{page_number}"
+        cache_key = f"{file_path}_{page_number}_{hash(highlight_text)}"
         if cache_key in self._pdf_page_cache:
             return self._pdf_page_cache[cache_key]
             
@@ -387,6 +387,20 @@ class RAGEngine:
                 return None
                 
             page = doc.load_page(page_number - 1)
+            
+            # Apply highlights if requested
+            if highlight_text:
+                # Split text into lines to maximize match probability
+                lines = [line.strip() for line in highlight_text.split('\n') if len(line.strip()) > 4]
+                if not lines and highlight_text.strip():
+                    lines = [highlight_text.strip()]
+                    
+                for line in lines:
+                    instances = page.search_for(line)
+                    for inst in instances:
+                        # Draw a yellow semi-transparent rectangle
+                        page.draw_rect(inst, color=(1, 1, 0), fill=(1, 1, 0), fill_opacity=0.3, width=0)
+            
             # Render at 150 DPI for good web display
             pix = page.get_pixmap(dpi=150)
             

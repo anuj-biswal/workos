@@ -25,5 +25,6 @@ rank-bm25
 tiktoken
 docling
 pymupdf
+pdfplumber
 pytesseract
 sentence-transformers

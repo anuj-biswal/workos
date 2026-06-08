@@ -1597,7 +1597,7 @@ async function handleFolderUpload(e) {
 
 // ── Citation PDF Viewer ───────────────────────────────────────────────
 let currentPdfZoom = 1;
-window.openPdfCitation = function(filename, pageNumber) {
+window.openPdfCitation = function(filename, pageNumber, highlightText = null) {
     const modal = document.getElementById('pdf-page-modal');
     const img = document.getElementById('pdf-page-img');
     const loading = document.getElementById('pdf-page-loading');
@@ -1612,7 +1612,11 @@ window.openPdfCitation = function(filename, pageNumber) {
     currentPdfZoom = 1;
     img.style.transform = `scale(${currentPdfZoom})`;
     
-    const imgUrl = `/api/workspace/${state.workspaceId}/rag/pdf-page/${encodeURIComponent(filename)}/${pageNumber}`;
+    let imgUrl = `/api/workspace/${state.workspaceId}/rag/pdf-page/${encodeURIComponent(filename)}/${pageNumber}`;
+    if (highlightText) {
+        // highlightText is already uri encoded from the onclick handler, but we use it in the url directly
+        imgUrl += `?highlight=${highlightText}`;
+    }
     
     // Preload image
     const tempImg = new Image();
@@ -1725,6 +1729,7 @@ window.viewDocumentChunks = async function(filename) {
                 <div class="chunk-text" id="chunk-text-${chunk.id}">${escapeHtml(chunk.text)}</div>
                 <div class="chunk-actions">
                     <button class="btn-accent btn-sm outline" onclick="document.getElementById('chunk-text-${chunk.id}').classList.toggle('expanded')">Expand/Collapse</button>
+                    <button class="btn-accent btn-sm outline" onclick="openPdfCitation('${escapeHtml(filename)}', ${chunk.metadata.page || 1}, '${encodeURIComponent(chunk.text).replace(/'/g, "\\'")}')"><i class="ph ph-file-pdf"></i> View Source</button>
                     <button class="btn-accent btn-sm" onclick="editChunk('${chunk.id}', this)">Edit Text</button>
                 </div>
             `;

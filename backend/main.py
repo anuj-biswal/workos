@@ -468,10 +468,10 @@ async def rag_delete_chunk(workspace_id: str, chunk_id: str):
     return {"status": "deleted"}
 
 @app.get("/api/workspace/{workspace_id}/rag/pdf-page/{filename}/{page_number}")
-async def rag_pdf_page(workspace_id: str, filename: str, page_number: int):
+async def rag_pdf_page(workspace_id: str, filename: str, page_number: int, highlight: Optional[str] = None):
     from fastapi.responses import Response
     file_path = os.path.join(BASE_WORKSPACE_DIR, workspace_id, filename)
-    img_bytes = rag_engine.render_pdf_page(file_path, page_number)
+    img_bytes = rag_engine.render_pdf_page(file_path, page_number, highlight_text=highlight)
     if not img_bytes:
         raise HTTPException(status_code=404, detail="Page not found or rendering failed")
     return Response(content=img_bytes, media_type="image/png")
