@@ -23,6 +23,9 @@ class DummyEmbeddingFunction:
         # default ONNX model.
         return [[0.0] * 3072 for _ in input]
 
+    def name(self) -> str:
+        return "DummyEmbeddingFunction"
+
 class RAGEngine:
     """Expert-Level Hybrid RAG engine using ChromaDB (vector) + BM25 (keyword) + ReRanking."""
 
