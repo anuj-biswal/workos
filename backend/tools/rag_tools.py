@@ -82,7 +82,6 @@ def search_documents(query: str, workspace_id: str = "default-workspace") -> str
     diagnostics = search_result.get("diagnostics", {})
 
     # Store and accumulate diagnostics for the debug panel
-    global _last_diagnostics, _last_context_chunks
     if _last_diagnostics is None:
         _last_diagnostics = dict(diagnostics)
         _last_diagnostics["query"] = query
