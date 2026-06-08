@@ -1,6 +1,9 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
 fastapi
 uvicorn
-pydantic>=2.8.0
+pydantic
 python-multipart
 openai
 langchain
@@ -11,7 +14,6 @@ numpy
 matplotlib
 seaborn
 PyPDF2
-pdfplumber
 openpyxl
 reportlab
 Pillow
