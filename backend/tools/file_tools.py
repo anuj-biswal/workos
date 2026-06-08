@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from langchain_core.tools import tool
 
 def get_file_path(workspace_id: str, filename: str) -> str:
@@ -48,6 +47,7 @@ def delete_file(filename: str, workspace_id: str = "default-workspace") -> str:
 def create_excel_file(filename: str, data: list[dict], workspace_id: str = "default-workspace") -> str:
     """Create an Excel file from a list of dictionaries (rows)."""
     try:
+        import pandas as pd
         path = get_file_path(workspace_id, filename)
         df = pd.DataFrame(data)
         df.to_excel(path, index=False)
@@ -59,6 +59,7 @@ def create_excel_file(filename: str, data: list[dict], workspace_id: str = "defa
 def read_excel_file(filename: str, workspace_id: str = "default-workspace") -> str:
     """Read an Excel file and return a string representation of the data."""
     try:
+        import pandas as pd
         path = get_file_path(workspace_id, filename)
         df = pd.read_excel(path)
         return df.to_json(orient='records')

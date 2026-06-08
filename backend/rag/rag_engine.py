@@ -4,7 +4,6 @@ import logging
 import time
 from typing import Optional, List, Dict, Any
 
-import chromadb
 from openai import OpenAI
 import fitz
 import io
@@ -23,8 +22,15 @@ class RAGEngine:
         self.persist_dir = persist_dir
         os.makedirs(persist_dir, exist_ok=True)
         
-        self.client = chromadb.PersistentClient(path=persist_dir)
+        self._client = None
         self.openai_client = OpenAI()
+        
+    @property
+    def client(self):
+        if self._client is None:
+            import chromadb
+            self._client = chromadb.PersistentClient(path=self.persist_dir)
+        return self._client
         
         self.hybrid_search_engine = HybridSearchEngine()
         self.query_expander = QueryExpander(self.openai_client)

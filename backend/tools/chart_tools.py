@@ -1,17 +1,13 @@
 import os
-import pandas as pd
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend for server use
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 from langchain_core.tools import tool
 
 def get_file_path(workspace_id: str, filename: str) -> str:
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_dir, "workspaces", workspace_id, filename)
 
-def _load_dataframe(workspace_id: str, dataset_filename: str) -> pd.DataFrame:
-    """Helper to load a dataset from workspace."""
+def _load_dataframe(workspace_id: str, dataset_filename: str):
+    import pandas as pd
     path = get_file_path(workspace_id, dataset_filename)
     if dataset_filename.endswith(".csv"):
         return pd.read_csv(path)
@@ -25,6 +21,11 @@ def generate_bar_chart(dataset_filename: str, x_column: str, y_column: str, outp
     For standard vertical bar charts, x_column should be the category and y_column the numeric value.
     """
     try:
+        import pandas as pd
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
         df = _load_dataframe(workspace_id, dataset_filename)
         fig, ax = plt.subplots(figsize=(10, 6))
         
@@ -65,6 +66,11 @@ def generate_bar_chart(dataset_filename: str, x_column: str, y_column: str, outp
 def generate_line_chart(dataset_filename: str, x_column: str, y_column: str, output_filename: str, title: str = "", workspace_id: str = "default-workspace") -> str:
     """Generate a line chart from a dataset and save it as an image."""
     try:
+        import pandas as pd
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
         df = _load_dataframe(workspace_id, dataset_filename)
         plt.figure(figsize=(10, 6))
         sns.lineplot(data=df, x=x_column, y=y_column, marker='o', linewidth=2)
@@ -86,6 +92,11 @@ def generate_line_chart(dataset_filename: str, x_column: str, y_column: str, out
 def generate_pie_chart(dataset_filename: str, category_column: str, value_column: str, output_filename: str, title: str = "", workspace_id: str = "default-workspace") -> str:
     """Generate a pie chart from a dataset and save it as an image."""
     try:
+        import pandas as pd
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
         df = _load_dataframe(workspace_id, dataset_filename)
         plt.figure(figsize=(8, 8))
         df_grouped = df.groupby(category_column)[value_column].sum()
@@ -106,6 +117,11 @@ def generate_pie_chart(dataset_filename: str, category_column: str, value_column
 def generate_histogram(dataset_filename: str, column: str, output_filename: str, bins: int = 20, title: str = "", workspace_id: str = "default-workspace") -> str:
     """Generate a histogram for a single numeric column from a dataset and save it as an image."""
     try:
+        import pandas as pd
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
         df = _load_dataframe(workspace_id, dataset_filename)
         plt.figure(figsize=(10, 6))
         sns.histplot(data=df, x=column, bins=bins, kde=True, color="#6366f1")

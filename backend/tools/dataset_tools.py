@@ -1,6 +1,6 @@
 import os
 import json
-import pandas as pd
+
 from langchain_core.tools import tool
 
 def get_file_path(workspace_id: str, filename: str) -> str:
@@ -11,6 +11,7 @@ def get_file_path(workspace_id: str, filename: str) -> str:
 def analyze_dataset(filename: str, workspace_id: str = "default-workspace") -> str:
     """Programmatically analyze a dataset file (Excel or CSV) and return summary statistics. Do NOT use this tool if the user asks you to explain or summarize a chart, or for general conversational queries."""
     try:
+        import pandas as pd
         path = get_file_path(workspace_id, filename)
         if filename.endswith(".csv"):
             df = pd.read_csv(path)
@@ -31,6 +32,7 @@ def analyze_dataset(filename: str, workspace_id: str = "default-workspace") -> s
 def clean_dataset(filename: str, output_filename: str = None, drop_na: bool = True, drop_duplicates: bool = True, workspace_id: str = "default-workspace") -> str:
     """Clean a dataset by dropping NAs and duplicates, then save it."""
     try:
+        import pandas as pd
         path = get_file_path(workspace_id, filename)
         if filename.endswith(".csv"):
             df = pd.read_csv(path)
@@ -61,6 +63,7 @@ def transform_dataset(filename: str, operations: list[dict], output_filename: st
     operations format: [{"type": "rename", "columns": {"old": "new"}}, {"type": "filter", "query": "age > 30"}]
     """
     try:
+        import pandas as pd
         path = get_file_path(workspace_id, filename)
         if filename.endswith(".csv"):
             df = pd.read_csv(path)

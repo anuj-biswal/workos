@@ -1,7 +1,7 @@
 import os
 import csv
 import json
-import pandas as pd
+
 from langchain_core.tools import tool
 
 def get_file_path(workspace_id: str, filename: str) -> str:
@@ -12,6 +12,7 @@ def get_file_path(workspace_id: str, filename: str) -> str:
 def create_csv_file(filename: str, data: list[dict], workspace_id: str = "default-workspace") -> str:
     """Create a CSV file from a list of dictionaries (rows)."""
     try:
+        import pandas as pd
         path = get_file_path(workspace_id, filename)
         df = pd.DataFrame(data)
         df.to_csv(path, index=False)
@@ -23,6 +24,7 @@ def create_csv_file(filename: str, data: list[dict], workspace_id: str = "defaul
 def read_csv_file(filename: str, workspace_id: str = "default-workspace") -> str:
     """Read a CSV file and return a string representation of the data."""
     try:
+        import pandas as pd
         path = get_file_path(workspace_id, filename)
         df = pd.read_csv(path)
         return df.to_json(orient='records')
