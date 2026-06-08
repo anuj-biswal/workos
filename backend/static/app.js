@@ -1649,8 +1649,9 @@ window.openPdfCitation = function(filename, pageNumber, highlightText = null) {
     
     let imgUrl = `/api/workspace/${state.workspaceId}/rag/pdf-page/${encodeURIComponent(filename)}/${pageNumber}`;
     if (highlightText) {
-        // highlightText is already uri encoded from the onclick handler, but we use it in the url directly
-        imgUrl += `?highlight=${highlightText}`;
+        // Truncate to 300 chars to avoid 414 URI Too Long on reverse proxies, and properly re-encode
+        const truncatedHighlight = highlightText.substring(0, 300);
+        imgUrl += `?highlight=${encodeURIComponent(truncatedHighlight)}`;
     }
     
     // Preload image
