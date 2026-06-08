@@ -24,6 +24,10 @@ class RAGEngine:
         
         self._client = None
         self.openai_client = OpenAI()
+        self.hybrid_search_engine = HybridSearchEngine()
+        self.query_expander = QueryExpander(self.openai_client)
+        self.reranker = ReRanker()
+        self.chunker = TableAwareChunker()
         
     @property
     def client(self):
@@ -31,11 +35,6 @@ class RAGEngine:
             import chromadb
             self._client = chromadb.PersistentClient(path=self.persist_dir)
         return self._client
-        
-        self.hybrid_search_engine = HybridSearchEngine()
-        self.query_expander = QueryExpander(self.openai_client)
-        self.reranker = ReRanker()
-        self.chunker = TableAwareChunker()
         
         # In-memory LRU cache for PDF page images could be added here
         self._pdf_page_cache = {}
