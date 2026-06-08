@@ -127,7 +127,7 @@ def search_documents(query: str, workspace_id: str = "default-workspace") -> str
     # Format results with clear citations
     output_parts = [
         f"Found {len(results)} relevant passages:\n",
-        "IMPORTANT INSTRUCTION: You MUST cite your sources in your final answer using the exact format: `[Source: filename, page N]`. The UI relies on this exact format to render clickable links.\n"
+        "IMPORTANT INSTRUCTION: You MUST cite your sources in your final answer using exactly this plain text format: `[Source: filename, page N]`. DO NOT wrap it in a Markdown link (no `[]()` or `file://`). The UI automatically detects the exact text `[Source: ...]` and converts it to a clickable badge.\n"
     ]
 
     for i, r in enumerate(results, 1):
