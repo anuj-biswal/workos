@@ -15,6 +15,14 @@ from .search import HybridSearchEngine, QueryExpander, OpenAIReRanker
 
 logger = logging.getLogger(__name__)
 
+class DummyEmbeddingFunction:
+    def __call__(self, input):
+        # We always supply our own embeddings (via OpenAI), but Chroma requires
+        # an embedding function definition. We mock it with 3072-dimension vectors
+        # corresponding to text-embedding-3-large to avoid downloading the heavy
+        # default ONNX model.
+        return [[0.0] * 3072 for _ in input]
+
 class RAGEngine:
     """Expert-Level Hybrid RAG engine using ChromaDB (vector) + BM25 (keyword) + ReRanking."""
 
@@ -39,7 +47,11 @@ class RAGEngine:
     def client(self):
         if self._client is None:
             import chromadb
-            self._client = chromadb.PersistentClient(path=self.persist_dir)
+            from chromadb.config import Settings
+            self._client = chromadb.PersistentClient(
+                path=self.persist_dir,
+                settings=Settings(anonymized_telemetry=False)
+            )
         return self._client
 
     def _collection_name(self, workspace_id: str) -> str:
@@ -52,6 +64,7 @@ class RAGEngine:
         return self.client.get_or_create_collection(
             name=self._collection_name(workspace_id),
             metadata={"hnsw:space": "cosine"},
+            embedding_function=DummyEmbeddingFunction()
         )
 
     def _embed_texts(self, texts: list[str]) -> list[list[float]]:

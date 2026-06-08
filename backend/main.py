@@ -1,3 +1,12 @@
+import sys
+# Standard workaround for ChromaDB sqlite3 version requirements on Linux/Render
+try:
+    if sys.platform != 'win32':
+        __import__('pysqlite3')
+        sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -463,30 +472,30 @@ async def delete_task(task_id: int):
 
 # ── RAG endpoints ─────────────────────────────────────────────────────────────
 @app.get("/api/workspace/{workspace_id}/rag/chunks")
-async def rag_get_chunks(workspace_id: str, document: Optional[str] = None, page: int = 1, per_page: int = 50):
+def rag_get_chunks(workspace_id: str, document: Optional[str] = None, page: int = 1, per_page: int = 50):
     return rag_engine.get_chunks(workspace_id, document, page, per_page)
 
 @app.get("/api/workspace/{workspace_id}/rag/chunks/{chunk_id}")
-async def rag_get_chunk(workspace_id: str, chunk_id: str):
+def rag_get_chunk(workspace_id: str, chunk_id: str):
     chunk = rag_engine.get_chunk(workspace_id, chunk_id)
     if not chunk:
         raise HTTPException(status_code=404, detail="Chunk not found")
     return chunk
 
 @app.put("/api/workspace/{workspace_id}/rag/chunks/{chunk_id}")
-async def rag_update_chunk(workspace_id: str, chunk_id: str, update: ChunkUpdate):
+def rag_update_chunk(workspace_id: str, chunk_id: str, update: ChunkUpdate):
     success = rag_engine.update_chunk(workspace_id, chunk_id, update.text)
     if not success:
         raise HTTPException(status_code=404, detail="Chunk not found")
     return {"status": "updated"}
 
 @app.delete("/api/workspace/{workspace_id}/rag/chunks/{chunk_id}")
-async def rag_delete_chunk(workspace_id: str, chunk_id: str):
+def rag_delete_chunk(workspace_id: str, chunk_id: str):
     success = rag_engine.delete_chunk(workspace_id, chunk_id)
     return {"status": "deleted"}
 
 @app.get("/api/workspace/{workspace_id}/rag/pdf-page/{filename}/{page_number}")
-async def rag_pdf_page(workspace_id: str, filename: str, page_number: int, highlight: Optional[str] = None):
+def rag_pdf_page(workspace_id: str, filename: str, page_number: int, highlight: Optional[str] = None):
     from fastapi.responses import Response
     file_path = os.path.join(BASE_WORKSPACE_DIR, workspace_id, filename)
     img_bytes = rag_engine.render_pdf_page(file_path, page_number, highlight_text=highlight)
@@ -520,15 +529,15 @@ async def upload_folder(request: Request, workspace_id: Optional[str] = Form("de
     return {"workspace_id": workspace_id, "files": results}
 
 @app.post("/api/rag/query")
-async def rag_query(req: RAGQueryRequest):
+def rag_query(req: RAGQueryRequest):
     return rag_engine.search(req.workspace_id, req.query, top_k=8, expand_query=req.expand_query, use_reranker=req.use_reranker)
 
 @app.post("/api/workspace/{workspace_id}/rag/re-embed-all")
-async def rag_reembed_all(workspace_id: str):
+def rag_reembed_all(workspace_id: str):
     return rag_engine.re_embed_all(workspace_id)
 
 @app.get("/api/workspace/{workspace_id}/rag/status")
-async def rag_status(workspace_id: str):
+def rag_status(workspace_id: str):
     """Get RAG indexing status for a workspace."""
     indexed_files = rag_engine.get_indexed_files(workspace_id)
     total_chunks = rag_engine.get_total_chunks(workspace_id)
@@ -539,7 +548,7 @@ async def rag_status(workspace_id: str):
     }
 
 @app.post("/api/workspace/{workspace_id}/rag/reindex")
-async def rag_reindex(workspace_id: str):
+def rag_reindex(workspace_id: str):
     """Re-index all files in a workspace."""
     workspace_path = os.path.join(BASE_WORKSPACE_DIR, workspace_id)
     if not os.path.exists(workspace_path):
@@ -557,7 +566,7 @@ async def rag_reindex(workspace_id: str):
     return {"files_indexed": len(results), "total_chunks": total_chunks, "details": results}
 
 @app.get("/api/workspace/{workspace_id}/rag/eval")
-async def rag_eval(workspace_id: str):
+def rag_eval(workspace_id: str):
     """Get RAG evaluation metrics: index health, search history, LLM judge scores."""
     indexed_files = rag_engine.get_indexed_files(workspace_id)
     total_chunks = rag_engine.get_total_chunks(workspace_id)

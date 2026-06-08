@@ -28,3 +28,4 @@ pymupdf
 pdfplumber
 pytesseract
 sentence-transformers
+pysqlite3-binary; sys_platform != 'win32'
