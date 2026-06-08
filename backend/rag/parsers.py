@@ -9,15 +9,7 @@ from PIL import Image
 import pytesseract
 import logging
 
-# Docling imports
-try:
-    from docling.document_converter import DocumentConverter
-    from docling.datamodel.base_models import DocumentStream
-    from docling_core.types.doc.document import TableItem, TextItem
-    DOCLING_AVAILABLE = True
-except ImportError:
-    DOCLING_AVAILABLE = False
-    logging.warning("Docling is not available. Falling back to other parsers.")
+# Docling is imported lazily in DoclingParser
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +28,17 @@ class BaseParser(ABC):
 
 class DoclingParser(BaseParser):
     def __init__(self):
-        if DOCLING_AVAILABLE:
+        try:
+            from docling.document_converter import DocumentConverter
             self.converter = DocumentConverter()
-        else:
+        except ImportError:
             raise ImportError("Docling is not installed")
 
     def parse(self, file_path: str) -> List[DocumentSection]:
+        try:
+            from docling_core.types.doc.document import TableItem, TextItem
+        except ImportError:
+            raise ImportError("docling_core is not installed")
         sections = []
         try:
             # Run Docling conversion
@@ -170,15 +167,17 @@ class DocumentParserFactory:
             return SpreadsheetParser().parse(file_path)
             
         elif ext in ['.pdf', '.docx', '.pptx']:
-            # Fallback chain: Docling -> PyMuPDF -> OCR
-            if DOCLING_AVAILABLE:
-                try:
-                    logger.info(f"Attempting Docling parse for {file_path}")
-                    sections = DoclingParser().parse(file_path)
-                    if sections:
-                        return sections
-                except Exception as e:
-                    logger.warning(f"Docling failed, falling back... {e}")
+            # Try Docling first
+            try:
+                import docling
+                logger.info(f"Attempting Docling parse for {file_path}")
+                sections = DoclingParser().parse(file_path)
+                if sections:
+                    return sections
+            except ImportError:
+                pass
+            except Exception as e:
+                logger.warning(f"Docling failed, falling back... {e}")
             
             # Try PyMuPDF for PDFs (or if Docling isn't available)
             if ext == '.pdf':

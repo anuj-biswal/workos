@@ -4,12 +4,7 @@ from rank_bm25 import BM25Okapi
 from openai import OpenAI
 import json
 
-try:
-    from sentence_transformers import CrossEncoder
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
-    logging.warning("sentence-transformers not available. Re-ranking disabled.")
+# sentence-transformers is imported lazily in ReRanker
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +53,15 @@ class ReRanker:
 
     def _get_model(self):
         if not self._initialized:
-            if SENTENCE_TRANSFORMERS_AVAILABLE:
-                try:
-                    self.model = CrossEncoder(self.model_name)
-                except Exception as e:
-                    logger.error(f"Failed to load ReRanker: {e}")
-                    self.model = None
+            try:
+                from sentence_transformers import CrossEncoder
+                self.model = CrossEncoder(self.model_name)
+            except ImportError:
+                logging.warning("sentence-transformers not available. Re-ranking disabled.")
+                self.model = None
+            except Exception as e:
+                logger.error(f"Failed to load ReRanker: {e}")
+                self.model = None
             self._initialized = True
         return self.model
 
