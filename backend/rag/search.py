@@ -52,13 +52,24 @@ User Question: {query}
 
 class ReRanker:
     def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
-            self.model = CrossEncoder(model_name)
-        else:
-            self.model = None
+        self.model_name = model_name
+        self.model = None
+        self._initialized = False
+
+    def _get_model(self):
+        if not self._initialized:
+            if SENTENCE_TRANSFORMERS_AVAILABLE:
+                try:
+                    self.model = CrossEncoder(self.model_name)
+                except Exception as e:
+                    logger.error(f"Failed to load ReRanker: {e}")
+                    self.model = None
+            self._initialized = True
+        return self.model
 
     def rerank(self, query: str, results: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
-        if not self.model or not results:
+        model = self._get_model()
+        if not model or not results:
             return results[:top_k]
             
         pairs = [[query, res["text"]] for res in results]
