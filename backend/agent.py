@@ -195,7 +195,7 @@ def planner_node(state: AgentState):
     workspace_files = _get_workspace_files(state.get("workspace_id", "default-workspace"))
     file_context = ""
     if workspace_files:
-        file_context = f"\n\nFiles currently in the workspace: {', '.join(workspace_files)}\nUse these filenames when the user refers to data — match the most relevant file to their request."
+        file_context = f"\n\nFiles currently in the workspace: {', '.join(workspace_files)}\n\nCRITICAL DIRECTIVE: You have files in your workspace. NEVER answer questions from your own knowledge if the answer could be in these files. You MUST ALWAYS use the `search_documents` tool to look up information first!"
     
     system_prompt = SystemMessage(content=SYSTEM_PROMPT + file_context)
     messages = [system_prompt] + state["messages"]
