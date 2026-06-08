@@ -13,7 +13,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 # Thread pool for blocking LangGraph / LLM calls
-_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+_EXECUTOR = ThreadPoolExecutor(max_workers=8)
+# Thread pool specifically for heavy background tasks (like Docling parsing)
+_INGEST_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 
 app = FastAPI(title="AgentOS — Agentic AI Platform")
 
@@ -119,7 +121,7 @@ async def upload_file(file: UploadFile = File(...), workspace_id: Optional[str] 
     try:
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
-            _EXECUTOR,
+            _INGEST_EXECUTOR,
             lambda: rag_engine.ingest_file(workspace_id, file.filename, file_path)
         )
         log_activity("rag_index", f"Indexing {file.filename} for semantic search")
@@ -490,7 +492,7 @@ async def upload_folder(request: Request, workspace_id: Optional[str] = Form("de
             try:
                 loop = asyncio.get_event_loop()
                 loop.run_in_executor(
-                    _EXECUTOR,
+                    _INGEST_EXECUTOR,
                     lambda f=file.filename, p=file_path: rag_engine.ingest_file(workspace_id, f, p)
                 )
                 results.append({"filename": file.filename, "status": "uploaded_and_indexing"})

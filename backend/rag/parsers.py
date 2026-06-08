@@ -167,17 +167,18 @@ class DocumentParserFactory:
             return SpreadsheetParser().parse(file_path)
             
         elif ext in ['.pdf', '.docx', '.pptx']:
-            # Try Docling first
-            try:
-                import docling
-                logger.info(f"Attempting Docling parse for {file_path}")
-                sections = DoclingParser().parse(file_path)
-                if sections:
-                    return sections
-            except ImportError:
-                pass
-            except Exception as e:
-                logger.warning(f"Docling failed, falling back... {e}")
+            # Try Docling first if enabled
+            if os.getenv("ENABLE_HEAVY_ML", "false").lower() == "true":
+                try:
+                    import docling
+                    logger.info(f"Attempting Docling parse for {file_path}")
+                    sections = DoclingParser().parse(file_path)
+                    if sections:
+                        return sections
+                except ImportError:
+                    pass
+                except Exception as e:
+                    logger.warning(f"Docling failed, falling back... {e}")
             
             # Try PyMuPDF for PDFs (or if Docling isn't available)
             if ext == '.pdf':

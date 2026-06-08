@@ -53,14 +53,19 @@ class ReRanker:
 
     def _get_model(self):
         if not self._initialized:
-            try:
-                from sentence_transformers import CrossEncoder
-                self.model = CrossEncoder(self.model_name)
-            except ImportError:
-                logging.warning("sentence-transformers not available. Re-ranking disabled.")
-                self.model = None
-            except Exception as e:
-                logger.error(f"Failed to load ReRanker: {e}")
+            import os
+            if os.getenv("ENABLE_HEAVY_ML", "false").lower() == "true":
+                try:
+                    from sentence_transformers import CrossEncoder
+                    self.model = CrossEncoder(self.model_name)
+                except ImportError:
+                    logging.warning("sentence-transformers not available. Re-ranking disabled.")
+                    self.model = None
+                except Exception as e:
+                    logger.error(f"Failed to load ReRanker: {e}")
+                    self.model = None
+            else:
+                logging.info("ENABLE_HEAVY_ML is false. Re-ranking disabled.")
                 self.model = None
             self._initialized = True
         return self.model
